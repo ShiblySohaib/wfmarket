@@ -5,6 +5,13 @@
 {% block page_title %}Market{% endblock %}
 
 {% block content %}
+<div class="search-section">
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search items, buyers, categories..." class="search-input">
+        <i class="fas fa-search search-icon"></i>
+    </div>
+</div>
+
 <div class="market-section">
     <div class="section-header">
         <div class="stats-container">
@@ -111,8 +118,89 @@
 
 {% block extra_css %}
 <style>
+:root {
+    --accent-blue-rgb: 0, 212, 255; /* RGB values for accent-blue */
+}
+
+.search-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.search-container {
+    position: relative;
+    width: 400px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 15px 50px 15px 20px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-icon {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+    font-size: 1.1rem;
+}
+
 .market-section {
     margin: 0;
+}
+
+/* Enhanced table transition styles */
+.market-table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.market-row {
+    transition: all 0.3s ease;
+}
+
+.market-row.new-row {
+    animation: newRowHighlight 1s ease-out;
+}
+
+@keyframes newRowHighlight {
+    0% {
+        background-color: rgba(var(--accent-blue-rgb), 0.2);
+        transform: scale(1.005);
+    }
+    50% {
+        background-color: rgba(var(--accent-blue-rgb), 0.1);
+    }
+    100% {
+        background-color: transparent;
+        transform: scale(1);
+    }
+}
+
+/* Smooth hover transitions */
+.market-row:hover {
+    background-color: var(--bg-tertiary);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .section-header {
@@ -630,6 +718,11 @@
         align-items: stretch;
         gap: 15px;
     }
+    
+    .search-container {
+        width: 100%;
+        max-width: 400px;
+    }
 }
 
 /* Whisper copied notification */
@@ -678,6 +771,7 @@ let currentMarketData = [];
 let updateTimeInterval = null;
 let fetchSessionId = null;
 let progressPollingInterval = null;
+let autoRefreshInterval = null; // For 2-minute auto refresh
 let failedItemsList = []; // Store failed items for modal
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -685,6 +779,73 @@ document.addEventListener('DOMContentLoaded', function() {
     
     if (hasItems) {
         fetchMarketData();
+    }
+    
+    // Initialize search functionality
+    initializeSearch();
+});
+
+function initializeSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            filterTable(searchTerm);
+        });
+    }
+}
+
+function filterTable(searchTerm) {
+    const table = document.getElementById('marketTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        if (!searchTerm) {
+            row.style.display = '';
+            visibleCount++;
+            return;
+        }
+        
+        const item = row.querySelector('.market-item')?.textContent.toLowerCase() || '';
+        const category = row.querySelector('.market-category')?.textContent.toLowerCase() || '';
+        const source = row.querySelector('.market-source')?.textContent.toLowerCase() || '';
+        const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
+        
+        const matches = item.includes(searchTerm) || 
+                       category.includes(searchTerm) || 
+                       source.includes(searchTerm) || 
+                       buyer.includes(searchTerm);
+        
+        if (matches) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update active orders count with filtered results
+    const activeOrdersCount = document.getElementById('activeOrdersCount');
+    if (activeOrdersCount && searchTerm) {
+        activeOrdersCount.textContent = visibleCount;
+    } else if (activeOrdersCount) {
+        activeOrdersCount.textContent = currentMarketData.length;
+    }
+}
+
+// Clean up intervals when page is unloaded
+window.addEventListener('beforeunload', function() {
+    if (progressPollingInterval) {
+        clearInterval(progressPollingInterval);
+    }
+    if (updateTimeInterval) {
+        clearInterval(updateTimeInterval);
+    }
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
     }
 });
 
@@ -812,6 +973,9 @@ function fetchMarketData() {
                         // Start time update interval
                         updateLastUpdatedTime();
                         startTimeUpdateInterval();
+                        
+                        // Start auto-refresh for future updates
+                        startAutoRefresh();
                     }, 1000);
                     
                     fetchSessionId = null;
@@ -848,10 +1012,15 @@ function fetchMarketData() {
 }
 
 function refreshMarketData() {
-    // Cancel any ongoing polling
+    // Cancel any ongoing polling and auto-refresh
     if (progressPollingInterval) {
         clearInterval(progressPollingInterval);
         progressPollingInterval = null;
+    }
+    
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
     
     // Reset session and failed items
@@ -932,13 +1101,146 @@ function startTimeUpdateInterval() {
     scheduleNextUpdate();
 }
 
+function startAutoRefresh() {
+    // Clear any existing auto-refresh interval
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+    }
+    
+    // Start auto-refresh every 2 minutes (120000 ms)
+    autoRefreshInterval = setInterval(() => {
+        console.log('Auto-refreshing market data...');
+        refreshMarketDataInBackground();
+    }, 120000);
+}
+
+function refreshMarketDataInBackground() {
+    // Don't start a new refresh if one is already in progress
+    if (progressPollingInterval || fetchSessionId) {
+        console.log('Refresh already in progress, skipping auto-refresh');
+        return;
+    }
+    
+    // Store the current data to compare later
+    const previousData = [...currentMarketData];
+    const previousFailedCount = failedItemsList.length;
+    
+    // Start the fetch process silently (no UI changes)
+    fetch('/market/fetch-data/?action=start', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'started') {
+            const sessionId = data.session_id;
+            
+            // Poll for progress silently
+            const silentPoll = setInterval(() => {
+                fetch(`/market/fetch-data/?action=progress&session_id=${sessionId}`, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                    }
+                })
+                .then(response => response.json())
+                .then(progressData => {
+                    if (progressData.status === 'complete') {
+                        clearInterval(silentPoll);
+                        
+                        // Check if data has actually changed
+                        const dataChanged = hasDataChanged(progressData.market_data);
+                        const failedCountChanged = progressData.total_failed !== previousFailedCount;
+                        
+                        if (dataChanged || failedCountChanged) {
+                            console.log('Data changed, updating UI...');
+                            
+                            // Update the UI with new data
+                            const activeOrdersCount = document.getElementById('activeOrdersCount');
+                            const failedItemsCount = document.getElementById('failedItemsCount');
+                            const failedCard = document.getElementById('failedCard');
+                            const tableContainer = document.getElementById('tableContainer');
+                            
+                            // Update stats
+                            activeOrdersCount.textContent = progressData.total_orders;
+                            failedItemsCount.textContent = progressData.total_failed;
+                            
+                            // Show/hide failed card based on completion and failed count
+                            if (progressData.total_failed > 0) {
+                                failedCard.style.display = 'flex';
+                            } else {
+                                failedCard.style.display = 'none';
+                            }
+                            
+                            // Update table if there's market data
+                            if (progressData.market_data.length > 0) {
+                                populateTable(progressData.market_data);
+                                tableContainer.style.display = 'block';
+                                currentMarketData = progressData.market_data;
+                            }
+                            
+                            // Update failed items for modal
+                            if (progressData.failed_items && progressData.failed_items.length > 0) {
+                                failedItemsList = progressData.failed_items;
+                            }
+                            
+                            // Update last fetch time and display
+                            lastFetchTime = new Date();
+                            updateLastUpdatedTime();
+                            
+                        } else {
+                            console.log('No data changes detected, skipping UI update');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error in silent polling:', error);
+                    clearInterval(silentPoll);
+                });
+            }, 1000);
+        }
+    })
+    .catch(error => {
+        console.error('Error starting background refresh:', error);
+    });
+}
+
 function populateTable(marketData) {
     const tbody = document.getElementById('marketTableBody');
-    tbody.innerHTML = '';
     
-    marketData.forEach(order => {
+    // Get existing rows
+    const existingRows = Array.from(tbody.querySelectorAll('tr'));
+    
+    // Create a more sophisticated comparison
+    const createRowKey = (order) => `${order.item}-${order.buyer}-${order.platinum}-${order.order_quantity}`;
+    
+    // Map existing rows by their data
+    const existingRowMap = new Map();
+    existingRows.forEach((row, index) => {
+        const item = row.querySelector('.market-item')?.textContent;
+        const buyer = row.querySelector('.market-buyer')?.textContent?.split('(')[0]?.trim();
+        const platinum = row.querySelector('.market-platinum')?.textContent;
+        const quantity = row.querySelector('.market-order-qty')?.textContent;
+        
+        if (item && buyer && platinum && quantity) {
+            const key = `${item}-${buyer}-${platinum}-${quantity}`;
+            existingRowMap.set(key, { row, index });
+        }
+    });
+    
+    // Create new row elements
+    const newRows = [];
+    const newRowKeys = new Set();
+    
+    marketData.forEach((order, index) => {
+        const rowKey = createRowKey(order);
+        newRowKeys.add(rowKey);
+        
         const row = document.createElement('tr');
         row.className = 'market-row';
+        row.dataset.rowKey = rowKey;
         
         const rankText = order.rank > 0 ? `Rank ${order.rank}` : 'Unranked';
         
@@ -964,8 +1266,73 @@ function populateTable(marketData) {
             </td>
         `;
         
-        tbody.appendChild(row);
+        // Check if this is a new row
+        const isNewRow = !existingRowMap.has(rowKey);
+        if (isNewRow) {
+            row.classList.add('new-row');
+            // Set initial animation state
+            row.style.opacity = '0';
+            row.style.transform = 'translateY(15px) scale(0.98)';
+        }
+        
+        newRows.push({ row, isNew: isNewRow, index });
     });
+    
+    // Remove rows that are no longer in the data
+    existingRows.forEach(row => {
+        const rowKey = row.dataset.rowKey;
+        if (rowKey && !newRowKeys.has(rowKey)) {
+            row.style.transition = 'opacity 0.2s ease-out, transform 0.2s ease-out';
+            row.style.opacity = '0';
+            row.style.transform = 'translateX(-20px) scale(0.98)';
+            setTimeout(() => {
+                if (row.parentNode) {
+                    row.parentNode.removeChild(row);
+                }
+            }, 200);
+        }
+    });
+    
+    // Clear and add all rows
+    setTimeout(() => {
+        tbody.innerHTML = '';
+        
+        newRows.forEach(({ row, isNew, index }) => {
+            tbody.appendChild(row);
+            
+            if (isNew) {
+                // Animate new rows in with staggered timing
+                setTimeout(() => {
+                    row.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
+                    row.style.opacity = '1';
+                    row.style.transform = 'translateY(0) scale(1)';
+                    
+                    // Add special highlight for new rows
+                    setTimeout(() => {
+                        row.style.transition = 'background-color 0.2s ease-out';
+                        row.style.backgroundColor = 'rgba(var(--accent-blue-rgb), 0.15)';
+                        
+                        setTimeout(() => {
+                            row.style.backgroundColor = '';
+                            row.classList.remove('new-row');
+                        }, 500);
+                    }, 100);
+                }, index * 30); // Stagger by 30ms per row
+            } else {
+                // Existing rows appear immediately
+                row.style.opacity = '1';
+                row.style.transform = 'translateY(0) scale(1)';
+            }
+        });
+    }, 100); // Small delay to allow exit animations
+    
+    // Reapply search filter after table update
+    setTimeout(() => {
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput && searchInput.value.trim()) {
+            filterTable(searchInput.value.toLowerCase().trim());
+        }
+    }, 200);
 }
 
 function copyWhisper(buyer, itemName, platinum, quantity) {
