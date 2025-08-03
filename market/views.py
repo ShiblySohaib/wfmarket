@@ -1,13 +1,16 @@
 import requests
 import time
 import re
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import deque
 from threading import Lock
 from django.shortcuts import render
 from django.http import JsonResponse
+from django.core.cache import cache
 from inventory.models import Item
 import logging
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -67,8 +70,6 @@ class RateLimiter:
             # Add current request
             self.requests.append(now)
 
-import re
-
 def clean_item_name(name):
     """Clean item name for API usage"""
     # Convert to lowercase
@@ -76,13 +77,12 @@ def clean_item_name(name):
     # Replace spaces with underscores
     name = name.replace(" ", "_")
     # Remove all other non-alphanumeric characters except underscores
-    cleaned = re.sub(r"[^a-z0-9_]", "", name)
+    cleaned = re.sub(r"[^a-z0-9_]", "_", name)
     # Remove multiple consecutive underscores
     cleaned = re.sub(r"_+", "_", cleaned)
     # Remove leading/trailing underscores
     cleaned = cleaned.strip("_")
     return cleaned
-
 
 def fetch_item_orders(item_name, rate_limiter):
     """Fetch buy orders for a specific item"""
@@ -136,18 +136,66 @@ def index(request):
     })
 
 def fetch_market_data(request):
-    """AJAX endpoint to fetch market data progressively"""
-    items = Item.objects.all()
+    """AJAX endpoint to start market data fetching or get progress"""
+    action = request.GET.get('action', 'start')
     
-    if not items:
-        return JsonResponse({
-            'status': 'complete',
+    if action == 'start':
+        # Start new fetch process
+        items = Item.objects.all()
+        
+        if not items:
+            return JsonResponse({
+                'status': 'complete',
+                'market_data': [],
+                'failed_items': [],
+                'total_orders': 0,
+                'total_failed': 0,
+                'progress': 100
+            })
+        
+        # Generate unique session ID for this fetch
+        session_id = str(uuid.uuid4())
+        
+        # Initialize progress in cache
+        cache.set(f'fetch_progress_{session_id}', {
+            'status': 'starting',
             'market_data': [],
             'failed_items': [],
             'total_orders': 0,
             'total_failed': 0,
-            'progress': 100
+            'progress': 0,
+            'processed_items': 0,
+            'total_items': len(items)
+        }, 300)  # 5 minutes timeout
+        
+        # Start background fetch
+        thread = threading.Thread(target=fetch_market_data_background, args=(session_id, list(items)))
+        thread.daemon = True
+        thread.start()
+        
+        return JsonResponse({
+            'session_id': session_id,
+            'status': 'started',
+            'total_items': len(items)
         })
+    
+    elif action == 'progress':
+        # Get progress for existing fetch
+        session_id = request.GET.get('session_id')
+        if not session_id:
+            return JsonResponse({'error': 'No session_id provided'}, status=400)
+        
+        progress_data = cache.get(f'fetch_progress_{session_id}')
+        if not progress_data:
+            return JsonResponse({'error': 'Session not found or expired'}, status=404)
+        
+        return JsonResponse(progress_data)
+    
+    else:
+        return JsonResponse({'error': 'Invalid action'}, status=400)
+
+def fetch_market_data_background(session_id, items):
+    """Background function to fetch market data with progress updates"""
     
     # Log fetching start
     log_fetch_start(len(items))
@@ -158,14 +206,52 @@ def fetch_market_data(request):
     retry_queue = []
     total_items = len(items)
     processed_items = 0
+    successful_items = 0  # Track only successful fetches
     
-    # First pass - fetch all items
+    def update_progress_only(status='fetching'):
+        """Update only progress in cache (lightweight)"""
+        progress_percent = int((successful_items / total_items) * 100) if total_items > 0 else 100
+        
+        # Get existing data from cache
+        existing_data = cache.get(f'fetch_progress_{session_id}', {})
+        
+        # Update only progress-related fields
+        existing_data.update({
+            'status': status,
+            'progress': progress_percent,
+            'processed_items': processed_items,
+            'successful_items': successful_items,
+            'total_items': total_items
+        })
+        
+        cache.set(f'fetch_progress_{session_id}', existing_data, 300)
+    
+    def update_full_data(status='fetching'):
+        """Update full data including market_data and failed_items"""
+        progress_percent = int((successful_items / total_items) * 100) if total_items > 0 else 100
+        # Sort market data by platinum amount (highest first) before updating
+        sorted_market_data = sorted(market_data, key=lambda x: x['platinum'], reverse=True)
+        
+        cache.set(f'fetch_progress_{session_id}', {
+            'status': status,
+            'market_data': sorted_market_data,
+            'failed_items': failed_items.copy(),
+            'total_orders': len(market_data),
+            'total_failed': len(failed_items),
+            'progress': progress_percent,
+            'processed_items': processed_items,
+            'successful_items': successful_items,
+            'total_items': total_items
+        }, 300)
+    
+    # First pass - fetch all items with progress updates
     with ThreadPoolExecutor(max_workers=5) as executor:
         future_to_item = {
             executor.submit(fetch_item_orders, item.name, rate_limiter): item 
             for item in items
         }
         
+        batch_count = 0
         for future in as_completed(future_to_item):
             item = future_to_item[future]
             processed_items += 1
@@ -173,6 +259,7 @@ def fetch_market_data(request):
             try:
                 result = future.result()
                 if result['status'] == 'success':
+                    successful_items += 1  # Only increment on success
                     # Process successful results
                     for order in result['data'][:5]:  # Limit to top 5 orders per item
                         market_data.append({
@@ -188,18 +275,33 @@ def fetch_market_data(request):
                             'user_reputation': order.get('user', {}).get('reputation', 0),
                             'user_status': order.get('user', {}).get('status', 'unknown')
                         })
+                    
+                    # Update progress bar every successful fetch
+                    update_progress_only('fetching')
+                    
                 elif result['status'] == 'rate_limited':
                     retry_queue.append(item.name)
                 else:
                     failed_items.append({
                         'item': item.name,
-                        'error': result.get('error', 'Unknown error')
+                        'error': result.get('error', 'Unknown error'),
+                        'url': f"https://api.warframe.market/v1/items/{clean_item_name(item.name)}/orders"
                     })
             except Exception as e:
                 failed_items.append({
                     'item': item.name,
-                    'error': str(e)
+                    'error': str(e),
+                    'url': f"https://api.warframe.market/v1/items/{clean_item_name(item.name)}/orders"
                 })
+            
+            batch_count += 1
+            # Update full data (table) every 10 items
+            if batch_count >= 10:
+                update_full_data('fetching')
+                batch_count = 0
+    
+    # Update progress after first pass
+    update_full_data('retrying' if retry_queue else 'completing')
     
     # Retry rate-limited items
     if retry_queue:
@@ -215,45 +317,43 @@ def fetch_market_data(request):
                 try:
                     result = future.result()
                     if result['status'] == 'success':
-                        item = items.get(name=item_name)
-                        for order in result['data'][:5]:
-                            market_data.append({
-                                'item': item.name,
-                                'item_id': item.id,
-                                'category': item.category,
-                                'source': item.source or 'Unknown',
-                                'inventory_quantity': item.quantity,
-                                'buyer': order.get('user', {}).get('ingame_name', 'Unknown'),
-                                'platinum': order.get('platinum', 0),
-                                'order_quantity': order.get('quantity', 1),
-                                'rank': order.get('mod_rank', 0),
-                                'user_reputation': order.get('user', {}).get('reputation', 0),
-                                'user_status': order.get('user', {}).get('status', 'unknown')
-                            })
+                        successful_items += 1  # Increment successful count on retry success
+                        item = next((i for i in items if i.name == item_name), None)
+                        if item:
+                            for order in result['data'][:5]:
+                                market_data.append({
+                                    'item': item.name,
+                                    'item_id': item.id,
+                                    'category': item.category,
+                                    'source': item.source or 'Unknown',
+                                    'inventory_quantity': item.quantity,
+                                    'buyer': order.get('user', {}).get('ingame_name', 'Unknown'),
+                                    'platinum': order.get('platinum', 0),
+                                    'order_quantity': order.get('quantity', 1),
+                                    'rank': order.get('mod_rank', 0),
+                                    'user_reputation': order.get('user', {}).get('reputation', 0),
+                                    'user_status': order.get('user', {}).get('status', 'unknown')
+                                })
+                        
+                        # Update progress bar on retry success
+                        update_progress_only('retrying')
                     else:
                         failed_items.append({
                             'item': item_name,
-                            'error': result.get('error', 'Rate limit retry failed')
+                            'error': result.get('error', 'Rate limit retry failed'),
+                            'url': f"https://api.warframe.market/v1/items/{clean_item_name(item_name)}/orders"
                         })
                 except Exception as e:
                     failed_items.append({
                         'item': item_name,
-                        'error': str(e)
+                        'error': str(e),
+                        'url': f"https://api.warframe.market/v1/items/{clean_item_name(item_name)}/orders"
                     })
     
-    # Sort market data by platinum amount (highest first)
-    market_data.sort(key=lambda x: x['platinum'], reverse=True)
+    # Final update - mark as complete
+    update_full_data('complete')
     
     # Log completion
     success_count = len(market_data)
     failed_count = len(failed_items)
     log_completion(success_count, failed_count)
-    
-    return JsonResponse({
-        'status': 'complete',
-        'market_data': market_data,
-        'failed_items': failed_items,
-        'total_orders': len(market_data),
-        'total_failed': len(failed_items),
-        'progress': 100
-    })
