@@ -8,7 +8,7 @@ from threading import Lock
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.core.cache import cache
-from inventory.models import Item
+from inventory.models import Item, SourceBalance
 import logging
 import uuid
 
@@ -83,6 +83,47 @@ def clean_item_name(name):
     # Remove leading/trailing underscores
     cleaned = cleaned.strip("_")
     return cleaned
+
+def get_source_balances():
+    """Get source balances from database, with dummy data as fallback"""
+    try:
+        balances = {}
+        for sb in SourceBalance.objects.all():
+            balances[sb.source] = sb.balance
+        
+        # Add dummy data if no source balances exist
+        if not balances:
+            balances = {
+                'red veil': 50000,
+                'steel meridian': 75000,
+                'arbiters of hexis': 60000,
+                'cephalon suda': 45000,
+                'new loka': 30000,
+                'perrin sequence': 90000
+            }
+        
+        return balances
+    except Exception as e:
+        logger.error(f"Error getting source balances: {e}")
+        # Return dummy data as fallback
+        return {
+            'red veil': 50000,
+            'steel meridian': 75000,
+            'arbiters of hexis': 60000,
+            'cephalon suda': 45000,
+            'new loka': 30000,
+            'perrin sequence': 90000
+        }
+
+def is_item_affordable(item, source_balances):
+    """Check if an item is affordable based on source balance"""
+    if not item.source or item.source.strip() == '':
+        return True  # No source means always show
+    
+    source_key = item.source.lower().strip()
+    source_balance = source_balances.get(source_key, 0)
+    
+    return item.price <= source_balance
 
 def fetch_item_orders(item_name, rate_limiter):
     """Fetch buy orders for a specific item"""
@@ -200,6 +241,9 @@ def fetch_market_data_background(session_id, items):
     # Log fetching start
     log_fetch_start(len(items))
     
+    # Get source balances at the start
+    source_balances = get_source_balances()
+    
     rate_limiter = RateLimiter(max_requests=10, time_window=1.0)
     market_data = []
     failed_items = []
@@ -261,6 +305,7 @@ def fetch_market_data_background(session_id, items):
                 if result['status'] == 'success':
                     successful_items += 1  # Only increment on success
                     # Process successful results
+                    is_affordable = is_item_affordable(item, source_balances)
                     for order in result['data'][:5]:  # Limit to top 5 orders per item
                         market_data.append({
                             'item': item.name,
@@ -273,7 +318,8 @@ def fetch_market_data_background(session_id, items):
                             'order_quantity': order.get('quantity', 1),
                             'rank': order.get('mod_rank', 0),
                             'user_reputation': order.get('user', {}).get('reputation', 0),
-                            'user_status': order.get('user', {}).get('status', 'unknown')
+                            'user_status': order.get('user', {}).get('status', 'unknown'),
+                            'is_affordable': is_affordable
                         })
                     
                     # Update progress bar every successful fetch
@@ -320,6 +366,7 @@ def fetch_market_data_background(session_id, items):
                         successful_items += 1  # Increment successful count on retry success
                         item = next((i for i in items if i.name == item_name), None)
                         if item:
+                            is_affordable = is_item_affordable(item, source_balances)
                             for order in result['data'][:5]:
                                 market_data.append({
                                     'item': item.name,
@@ -332,7 +379,8 @@ def fetch_market_data_background(session_id, items):
                                     'order_quantity': order.get('quantity', 1),
                                     'rank': order.get('mod_rank', 0),
                                     'user_reputation': order.get('user', {}).get('reputation', 0),
-                                    'user_status': order.get('user', {}).get('status', 'unknown')
+                                    'user_status': order.get('user', {}).get('status', 'unknown'),
+                                    'is_affordable': is_affordable
                                 })
                         
                         # Update progress bar on retry success

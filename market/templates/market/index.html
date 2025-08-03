@@ -10,6 +10,13 @@
         <input type="text" id="searchInput" placeholder="Search items, buyers, categories..." class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
+    <div class="filter-container">
+        <label class="checkbox-container">
+            <input type="checkbox" id="showAffordableOnly" checked onchange="toggleAffordableFilter()">
+            <span class="checkmark"></span>
+            Show affordable only
+        </label>
+    </div>
 </div>
 
 <div class="market-section">
@@ -124,13 +131,42 @@
 
 .search-section {
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    align-items: center;
     margin-bottom: 30px;
+    gap: 15px;
 }
 
 .search-container {
     position: relative;
     width: 400px;
+}
+
+.filter-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.checkbox-container {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    gap: 8px;
+    user-select: none;
+}
+
+.checkbox-container input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--accent-blue);
+}
+
+.checkbox-container:hover {
+    color: var(--accent-blue);
 }
 
 .search-input {
@@ -201,6 +237,19 @@
     background-color: var(--bg-tertiary);
     transform: translateY(-1px);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Unaffordable item styling */
+.market-row.unaffordable-item {
+    opacity: 0.6;
+    background-color: rgba(255, 99, 71, 0.1);
+}
+
+.market-row.unaffordable-item:hover {
+    opacity: 0.8;
+    background-color: rgba(255, 99, 71, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(255, 99, 71, 0.2);
 }
 
 .section-header {
@@ -800,26 +849,38 @@ function filterTable(searchTerm) {
     if (!table) return;
     
     const rows = table.querySelectorAll('tbody tr');
+    const showAffordableOnly = document.getElementById('showAffordableOnly')?.checked || false;
     let visibleCount = 0;
     
     rows.forEach(row => {
-        if (!searchTerm) {
-            row.style.display = '';
-            visibleCount++;
-            return;
+        let shouldShow = true;
+        
+        // Apply search filter
+        if (searchTerm) {
+            const item = row.querySelector('.market-item')?.textContent.toLowerCase() || '';
+            const category = row.querySelector('.market-category')?.textContent.toLowerCase() || '';
+            const source = row.querySelector('.market-source')?.textContent.toLowerCase() || '';
+            const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
+            
+            const matches = item.includes(searchTerm) || 
+                           category.includes(searchTerm) || 
+                           source.includes(searchTerm) || 
+                           buyer.includes(searchTerm);
+            
+            if (!matches) {
+                shouldShow = false;
+            }
         }
         
-        const item = row.querySelector('.market-item')?.textContent.toLowerCase() || '';
-        const category = row.querySelector('.market-category')?.textContent.toLowerCase() || '';
-        const source = row.querySelector('.market-source')?.textContent.toLowerCase() || '';
-        const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
+        // Apply affordability filter
+        if (shouldShow && showAffordableOnly) {
+            const isUnaffordable = row.classList.contains('unaffordable-item');
+            if (isUnaffordable) {
+                shouldShow = false;
+            }
+        }
         
-        const matches = item.includes(searchTerm) || 
-                       category.includes(searchTerm) || 
-                       source.includes(searchTerm) || 
-                       buyer.includes(searchTerm);
-        
-        if (matches) {
+        if (shouldShow) {
             row.style.display = '';
             visibleCount++;
         } else {
@@ -829,11 +890,15 @@ function filterTable(searchTerm) {
     
     // Update active orders count with filtered results
     const activeOrdersCount = document.getElementById('activeOrdersCount');
-    if (activeOrdersCount && searchTerm) {
+    if (activeOrdersCount) {
         activeOrdersCount.textContent = visibleCount;
-    } else if (activeOrdersCount) {
-        activeOrdersCount.textContent = currentMarketData.length;
     }
+}
+
+function toggleAffordableFilter() {
+    const searchInput = document.getElementById('searchInput');
+    const searchTerm = searchInput ? searchInput.value.toLowerCase().trim() : '';
+    filterTable(searchTerm);
 }
 
 // Clean up intervals when page is unloaded
@@ -1242,6 +1307,11 @@ function populateTable(marketData) {
         row.className = 'market-row';
         row.dataset.rowKey = rowKey;
         
+        // Add unaffordable class if not affordable
+        if (order.is_affordable === false) {
+            row.classList.add('unaffordable-item');
+        }
+        
         const rankText = order.rank > 0 ? `Rank ${order.rank}` : 'Unranked';
         
         row.innerHTML = `
@@ -1326,12 +1396,11 @@ function populateTable(marketData) {
         });
     }, 100); // Small delay to allow exit animations
     
-    // Reapply search filter after table update
+    // Reapply search filter and affordability filter after table update
     setTimeout(() => {
         const searchInput = document.getElementById('searchInput');
-        if (searchInput && searchInput.value.trim()) {
-            filterTable(searchInput.value.toLowerCase().trim());
-        }
+        const searchTerm = searchInput && searchInput.value.trim() ? searchInput.value.toLowerCase().trim() : '';
+        filterTable(searchTerm);
     }, 200);
 }
 
