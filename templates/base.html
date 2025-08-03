@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Warframe Market Manager{% endblock %}</title>
+    {% load static %}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>WF Market</h2>
+            </div>
+            <ul class="sidebar-nav">
+                <li class="nav-item">
+                    <a href="{% url 'inventory:index' %}" class="nav-link {% if request.resolver_match.app_name == 'inventory' %}active{% endif %}">
+                        <i class="fas fa-box nav-icon"></i>
+                        <span class="nav-text">Inventory</span>
+                    </a>
+                </li>
+                <!-- Future navigation items will go here -->
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>{% block page_title %}Warframe Market Manager{% endblock %}</h1>
+            </div>
+            
+            <!-- Messages -->
+            {% if messages %}
+                <div class="messages">
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- Page Content -->
+            <div class="content-body">
+                {% block content %}
+                <div class="welcome-message">
+                    <h2>Welcome to your Warframe Market Manager</h2>
+                    <p>Use the sidebar to navigate through your inventory and market data.</p>
+                </div>
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
