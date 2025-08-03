@@ -1,0 +1,782 @@
+{% extends 'base.html' %}
+
+{% block title %}Sources - Warframe Market Manager{% endblock %}
+
+{% block page_title %}Sources{% endblock %}
+
+{% block content %}
+<div class="search-section">
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Search sources..." class="search-input">
+        <i class="fas fa-search search-icon"></i>
+    </div>
+</div>
+
+<div class="inventory-section">
+    <div class="section-header">
+        <div class="stats-container">
+            <div class="inventory-info-card">
+                <i class="fas fa-coins inventory-icon"></i>
+                <div class="inventory-stats">
+                    <span class="stats-label">Total Sources</span>
+                    <span class="stats-count" id="sourcesCount">{{ total_sources }}</span>
+                </div>
+            </div>
+        </div>
+        <button class="btn btn-add" onclick="showAddSourceModal()">
+            <i class="fas fa-plus"></i>
+            Add Source
+        </button>
+    </div>
+    
+    {% if sources %}
+        <div class="table-container">
+            <table class="inventory-table" id="sourcesTable">
+                <thead>
+                    <tr>
+                        <th>Source</th>
+                        <th>Balance</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sourcesTableBody">
+                    {% for source in sources %}
+                    <tr class="inventory-row" data-source-id="{{ source.id }}">
+                        <td class="source-name">{{ source.source|title }}</td>
+                        <td class="source-balance">{{ source.balance }}</td>
+                        <td class="source-actions">
+                            <button class="btn btn-edit" onclick="editSource({{ source.id }}, '{{ source.source }}', {{ source.balance }})" title="Edit source">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button class="btn btn-delete" onclick="confirmDeleteSource({{ source.id }}, '{{ source.source }}')" title="Delete source">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="empty-icon">
+                <i class="fas fa-coins"></i>
+            </div>
+            <h3>No Sources Found</h3>
+            <p>Start by adding your first source balance.</p>
+            <button class="btn btn-add" onclick="showAddSourceModal()">
+                <i class="fas fa-plus"></i>
+                Add Your First Source
+            </button>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Add Source Modal -->
+<div class="modal-overlay" id="addSourceModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-plus"></i> Add New Source</h3>
+            <button class="modal-close" onclick="hideAddSourceModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="addSourceForm">
+                {% csrf_token %}
+                <div class="form-group">
+                    <label for="addSourceName">Source Name:</label>
+                    <input type="text" id="addSourceName" name="source" required placeholder="e.g., red veil">
+                </div>
+                <div class="form-group">
+                    <label for="addSourceBalance">Balance:</label>
+                    <input type="number" id="addSourceBalance" name="balance" min="0" required placeholder="e.g., 50000">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideAddSourceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Source Modal -->
+<div class="modal-overlay" id="editSourceModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-edit"></i> Edit Source</h3>
+            <button class="modal-close" onclick="hideEditSourceModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <form id="editSourceForm">
+                {% csrf_token %}
+                <input type="hidden" id="editSourceId" name="id">
+                <div class="form-group">
+                    <label for="editSourceName">Source Name:</label>
+                    <input type="text" id="editSourceName" name="source" required>
+                </div>
+                <div class="form-group">
+                    <label for="editSourceBalance">Balance:</label>
+                    <input type="number" id="editSourceBalance" name="balance" min="0" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideEditSourceModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update Source</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal-overlay" id="deleteSourceModal" style="display: none;">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-trash"></i> Delete Source</h3>
+            <button class="modal-close" onclick="hideDeleteSourceModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <p id="deleteSourceMessage">Are you sure you want to delete this source?</p>
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="hideDeleteSourceModal()">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn" onclick="deleteSource()">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Notification -->
+<div class="notification" id="notification" style="display: none;">
+    <span id="notificationMessage"></span>
+    <button onclick="hideNotification()">
+        <i class="fas fa-times"></i>
+    </button>
+</div>
+
+<style>
+/* Use the same styles as inventory page */
+.search-section {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 30px;
+}
+
+.search-container {
+    position: relative;
+    width: 400px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 15px 50px 15px 20px;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+    transition: all 0.3s ease;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+}
+
+.search-input::placeholder {
+    color: var(--text-muted);
+}
+
+.search-icon {
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+.inventory-section {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    padding: 30px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 25px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid var(--accent-blue);
+}
+
+.stats-container {
+    display: flex;
+    gap: 20px;
+}
+
+.inventory-info-card {
+    display: flex;
+    align-items: center;
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 15px 20px;
+    gap: 15px;
+}
+
+.inventory-icon {
+    font-size: 1.3rem;
+    color: #d4a574;
+}
+
+.inventory-stats {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.stats-label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 500;
+}
+
+.stats-count {
+    color: var(--accent-blue);
+    font-size: 1.4rem;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.table-container {
+    background-color: var(--bg-secondary);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+}
+
+.inventory-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.inventory-table th {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 15px 20px;
+    text-align: center;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.inventory-table th:first-child {
+    text-align: left;
+}
+
+.inventory-table td {
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    text-align: center;
+}
+
+.inventory-table td:first-child {
+    text-align: left;
+}
+
+.inventory-row {
+    transition: background-color 0.2s ease;
+}
+
+.inventory-row:hover {
+    background-color: var(--hover-color);
+}
+
+.inventory-row:last-child td {
+    border-bottom: none;
+}
+
+.source-name {
+    color: var(--accent-blue) !important;
+    font-weight: 500;
+}
+
+.source-balance {
+    color: var(--accent-gold) !important;
+    font-weight: 600;
+}
+
+.source-actions {
+    text-align: center;
+    white-space: nowrap;
+}
+
+.btn {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-weight: 500;
+}
+
+.btn-edit {
+    background-color: var(--accent-blue);
+    color: var(--bg-primary);
+}
+
+.btn-edit:hover {
+    background-color: #00b8e6;
+    transform: scale(1.1);
+}
+
+.btn-edit i {
+    color: var(--bg-primary);
+}
+
+.btn-delete {
+    background-color: var(--error);
+    color: white;
+}
+
+.btn-delete:hover {
+    background-color: #d32f2f;
+    transform: scale(1.1);
+}
+
+.btn-delete i {
+    color: white;
+}
+
+.btn-primary {
+    background-color: var(--accent-blue);
+    color: var(--bg-primary);
+}
+
+.btn-primary:hover {
+    background-color: #00b8e6;
+}
+
+.btn-secondary {
+    background-color: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--hover-color);
+}
+
+.btn-add {
+    background-color: var(--accent-blue);
+    color: var(--bg-primary);
+    padding: 12px 20px;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-add:hover {
+    background-color: #0099cc;
+}
+
+.btn-add:active {
+    background-color: #007399;
+    transform: scale(0.98);
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.btn-add i {
+    color: var(--bg-primary);
+    font-size: 0.9rem;
+}
+
+.btn-danger {
+    background-color: var(--error);
+    color: white;
+}
+
+.btn-danger:hover {
+    background-color: #d32f2f;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+}
+
+.empty-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: var(--text-primary);
+    margin-bottom: 10px;
+}
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--bg-secondary);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header h3 {
+    color: var(--text-primary);
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.3s ease;
+}
+
+.modal-close:hover {
+    color: var(--text-primary);
+}
+
+.modal-body {
+    padding: 25px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 12px 15px;
+    background-color: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.2);
+}
+
+.form-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background-color: var(--accent-green);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 1001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.notification.error {
+    background-color: var(--accent-red);
+}
+
+.notification button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 1.1rem;
+}
+</style>
+
+<script>
+let deleteSourceId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize search functionality
+    initializeSearch();
+    
+    // Add source form submission
+    document.getElementById('addSourceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        addSource();
+    });
+    
+    // Edit source form submission
+    document.getElementById('editSourceForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        updateSource();
+    });
+});
+
+function initializeSearch() {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+            filterTable(searchTerm);
+        });
+    }
+}
+
+function filterTable(searchTerm) {
+    const table = document.getElementById('sourcesTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    let visibleCount = 0;
+    
+    rows.forEach(row => {
+        if (!searchTerm) {
+            row.style.display = '';
+            visibleCount++;
+            return;
+        }
+        
+        const sourceName = row.querySelector('.source-name')?.textContent.toLowerCase() || '';
+        const balance = row.querySelector('.source-balance')?.textContent.toLowerCase() || '';
+        
+        const matches = sourceName.includes(searchTerm) || balance.includes(searchTerm);
+        
+        if (matches) {
+            row.style.display = '';
+            visibleCount++;
+        } else {
+            row.style.display = 'none';
+        }
+    });
+    
+    // Update sources count
+    const sourcesCount = document.getElementById('sourcesCount');
+    if (sourcesCount) {
+        sourcesCount.textContent = searchTerm ? visibleCount : {{ total_sources }};
+    }
+}
+
+function showAddSourceModal() {
+    document.getElementById('addSourceModal').style.display = 'flex';
+    document.getElementById('addSourceName').focus();
+}
+
+function hideAddSourceModal() {
+    document.getElementById('addSourceModal').style.display = 'none';
+    document.getElementById('addSourceForm').reset();
+}
+
+function showEditSourceModal() {
+    document.getElementById('editSourceModal').style.display = 'flex';
+    document.getElementById('editSourceName').focus();
+}
+
+function hideEditSourceModal() {
+    document.getElementById('editSourceModal').style.display = 'none';
+    document.getElementById('editSourceForm').reset();
+}
+
+function showDeleteSourceModal() {
+    document.getElementById('deleteSourceModal').style.display = 'flex';
+}
+
+function hideDeleteSourceModal() {
+    document.getElementById('deleteSourceModal').style.display = 'none';
+    deleteSourceId = null;
+}
+
+function editSource(id, name, balance) {
+    document.getElementById('editSourceId').value = id;
+    document.getElementById('editSourceName').value = name;
+    document.getElementById('editSourceBalance').value = balance;
+    showEditSourceModal();
+}
+
+function confirmDeleteSource(id, name) {
+    deleteSourceId = id;
+    document.getElementById('deleteSourceMessage').textContent = 
+        `Are you sure you want to delete "${name}"? This action cannot be undone.`;
+    showDeleteSourceModal();
+}
+
+function addSource() {
+    const formData = new FormData(document.getElementById('addSourceForm'));
+    const data = {
+        source: formData.get('source'),
+        balance: formData.get('balance')
+    };
+    
+    fetch('{% url "sources:add_source" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Source added successfully!');
+            hideAddSourceModal();
+            location.reload(); // Simple reload for now
+        } else {
+            showNotification(data.error || 'Failed to add source', 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('An error occurred while adding the source', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function updateSource() {
+    const formData = new FormData(document.getElementById('editSourceForm'));
+    const sourceId = formData.get('id');
+    const data = {
+        source: formData.get('source'),
+        balance: formData.get('balance')
+    };
+    
+    fetch(`/sources/edit/${sourceId}/`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': formData.get('csrfmiddlewaretoken')
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification('Source updated successfully!');
+            hideEditSourceModal();
+            location.reload(); // Simple reload for now
+        } else {
+            showNotification(data.error || 'Failed to update source', 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('An error occurred while updating the source', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function deleteSource() {
+    if (!deleteSourceId) return;
+    
+    // Get CSRF token from any form on the page
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    
+    fetch(`/sources/delete/${deleteSourceId}/`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRFToken': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showNotification(data.message);
+            hideDeleteSourceModal();
+            location.reload(); // Simple reload for now
+        } else {
+            showNotification(data.error || 'Failed to delete source', 'error');
+        }
+    })
+    .catch(error => {
+        showNotification('An error occurred while deleting the source', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function showNotification(message, type = 'success') {
+    const notification = document.getElementById('notification');
+    const messageElement = document.getElementById('notificationMessage');
+    
+    messageElement.textContent = message;
+    notification.className = `notification ${type}`;
+    notification.style.display = 'flex';
+    
+    // Auto hide after 5 seconds
+    setTimeout(() => {
+        hideNotification();
+    }, 5000);
+}
+
+function hideNotification() {
+    document.getElementById('notification').style.display = 'none';
+}
+
+// Close modals when clicking outside
+document.addEventListener('click', function(e) {
+    const modals = document.querySelectorAll('.modal-overlay');
+    modals.forEach(modal => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+});
+</script>
+{% endblock %}

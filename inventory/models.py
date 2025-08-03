@@ -7,13 +7,6 @@ class TimestampedModel(models.Model):
     class Meta:
         abstract = True
 
-class SourceBalance(models.Model):
-    source = models.CharField(max_length=100, unique=True)
-    balance = models.PositiveIntegerField(default=0)
-    
-    def __str__(self):
-        return f"{self.source}: {self.balance}"
-
 class Item(TimestampedModel):
     name = models.CharField(max_length=100, unique=True)
     category = models.CharField(max_length=50)

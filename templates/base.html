@@ -29,6 +29,12 @@
                         <span class="nav-text">Market</span>
                     </a>
                 </li>
+                <li class="nav-item">
+                    <a href="{% url 'sources:index' %}" class="nav-link {% if request.resolver_match.app_name == 'sources' %}active{% endif %}">
+                        <i class="fas fa-coins nav-icon"></i>
+                        <span class="nav-text">Sources</span>
+                    </a>
+                </li>
                 <!-- Future navigation items will go here -->
             </ul>
         </nav>

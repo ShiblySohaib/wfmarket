@@ -8,7 +8,8 @@ from threading import Lock
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.core.cache import cache
-from inventory.models import Item, SourceBalance
+from inventory.models import Item
+from sources.models import SourceBalance
 import logging
 import uuid
 
@@ -85,35 +86,15 @@ def clean_item_name(name):
     return cleaned
 
 def get_source_balances():
-    """Get source balances from database, with dummy data as fallback"""
+    """Get source balances from database"""
     try:
         balances = {}
         for sb in SourceBalance.objects.all():
             balances[sb.source] = sb.balance
-        
-        # Add dummy data if no source balances exist
-        if not balances:
-            balances = {
-                'red veil': 50000,
-                'steel meridian': 75000,
-                'arbiters of hexis': 60000,
-                'cephalon suda': 45000,
-                'new loka': 30000,
-                'perrin sequence': 90000
-            }
-        
         return balances
     except Exception as e:
         logger.error(f"Error getting source balances: {e}")
-        # Return dummy data as fallback
-        return {
-            'red veil': 50000,
-            'steel meridian': 75000,
-            'arbiters of hexis': 60000,
-            'cephalon suda': 45000,
-            'new loka': 30000,
-            'perrin sequence': 90000
-        }
+        return {}
 
 def is_item_affordable(item, source_balances):
     """Check if an item is affordable based on source balance"""

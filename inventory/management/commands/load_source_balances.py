@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from inventory.models import SourceBalance
+from sources.models import SourceBalance
 
 class Command(BaseCommand):
     help = 'Load dummy source balance data'
