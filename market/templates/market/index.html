@@ -7,7 +7,7 @@
 {% block content %}
 <div class="search-section">
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search items, rank, buyer, source... Use & for AND, | for OR" class="search-input">
+        <input type="text" id="searchInput" placeholder="Search here..." class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
     <div class="filter-container">
@@ -671,14 +671,14 @@
 }
 
 .btn-whisper {
-    background-color: #4caf50;
-    color: white;
+    background-color: transparent;
+    color: var(--accent-blue);
     padding: 6px 12px;
     font-size: 0.85rem;
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    border: none;
+    border: 1px solid var(--accent-blue);
     border-radius: 4px;
     cursor: pointer;
     font-weight: 500;
@@ -686,16 +686,20 @@
 }
 
 .btn-whisper:hover {
-    background-color: #45a049;
+    background-color: rgba(0, 212, 255, 0.1);
+    border-color: #0099cc;
+    color: #0099cc;
 }
 
 .btn-whisper:active {
-    background-color: #3d8b40;
+    background-color: rgba(0, 212, 255, 0.2);
+    border-color: #007399;
+    color: #007399;
     transform: scale(0.98);
 }
 
 .btn-whisper i {
-    color: white;
+    color: var(--accent-blue);
     font-size: 0.8rem;
 }
 
@@ -1556,7 +1560,7 @@ function populateTable(marketData) {
             <td class="market-rank">${rankText}</td>
             <td class="market-actions">
                 <button class="btn btn-whisper" onclick="copyWhisper('${order.buyer}', '${order.item}', ${order.platinum}, ${order.order_quantity})" title="Copy whisper message">
-                    <i class="fas fa-comment"></i>
+                    <i class="fas fa-comments"></i>
                     Whisper
                 </button>
             </td>
