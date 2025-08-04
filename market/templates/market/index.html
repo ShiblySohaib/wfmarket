@@ -1242,7 +1242,7 @@ function fetchMarketData() {
                     // Check if data has changed
                     const dataChanged = hasDataChanged(data.market_data);
                     
-                    if (dataChanged || currentMarketData.length === 0) {
+                    if (dataChanged) {
                         // Hide loading state on first data
                         if (loadingState && loadingState.style.display !== 'none') {
                             loadingState.style.display = 'none';
@@ -1356,22 +1356,35 @@ function hasDataChanged(newData) {
         return true;
     }
     
-    // Simple comparison - in production you might want more sophisticated comparison
-    const currentStr = JSON.stringify(currentMarketData.map(item => ({
-        item: item.item,
-        buyer: item.buyer,
-        platinum: item.platinum,
-        order_quantity: item.order_quantity
-    })));
+    // Create maps for faster lookup
+    const currentDataMap = new Map();
+    const newDataMap = new Map();
     
-    const newStr = JSON.stringify(newData.map(item => ({
-        item: item.item,
-        buyer: item.buyer,
-        platinum: item.platinum,
-        order_quantity: item.order_quantity
-    })));
+    // Create unique keys for each item and store in map
+    currentMarketData.forEach(item => {
+        const key = `${item.item}|${item.buyer}|${item.platinum}|${item.order_quantity}|${item.rank}|${item.inventory_quantity}`;
+        currentDataMap.set(key, true);
+    });
     
-    return currentStr !== newStr;
+    // Check if any item in the new data doesn't exist in current data
+    for (const item of newData) {
+        const key = `${item.item}|${item.buyer}|${item.platinum}|${item.order_quantity}|${item.rank}|${item.inventory_quantity}`;
+        if (!currentDataMap.has(key)) {
+            return true; // Found a new item that doesn't exist in current data
+        }
+        newDataMap.set(key, true);
+    }
+    
+    // Check if any item in current data doesn't exist in new data
+    for (const item of currentMarketData) {
+        const key = `${item.item}|${item.buyer}|${item.platinum}|${item.order_quantity}|${item.rank}|${item.inventory_quantity}`;
+        if (!newDataMap.has(key)) {
+            return true; // Found an item in current data that doesn't exist in new data
+        }
+    }
+    
+    // No differences found
+    return false;
 }
 
 function updateLastUpdatedTime() {
