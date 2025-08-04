@@ -1721,7 +1721,7 @@ function populateTable(marketData) {
 
 function copyWhisper(buyer, itemName, platinum, quantity) {
     // Format the whisper message according to Warframe Market standards
-    const whisperMessage = `/w ${buyer} Hi! I want to buy: ${itemName} for ${platinum} platinum. (warframe.market)`;
+    const whisperMessage = `/w ${buyer} Hi! I want to sell: ${itemName} for ${platinum} platinum. (warframe.market)`;
     
     // Copy to clipboard
     navigator.clipboard.writeText(whisperMessage).then(function() {
