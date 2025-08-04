@@ -20,12 +20,19 @@ def index(request):
 def add_item(request):
     """Add a new item via AJAX"""
     try:
+        # Handle empty price field gracefully
+        price = request.POST.get('price')
+        if price and price.strip():
+            price = int(float(price))
+        else:
+            price = None
+            
         item = Item(
             name=request.POST.get('name'),
             quantity=int(request.POST.get('quantity')),
             category=request.POST.get('category'),
             source=request.POST.get('source', ''),
-            price=int(request.POST.get('price', 0))
+            price=price
         )
         
         item.save()
@@ -41,11 +48,18 @@ def edit_item(request, item_id):
     try:
         item = get_object_or_404(Item, id=item_id)
         
+        # Handle empty price field gracefully
+        price = request.POST.get('price')
+        if price and price.strip():
+            price = int(float(price))
+        else:
+            price = None
+        
         item.name = request.POST.get('name')
         item.quantity = int(request.POST.get('quantity'))
         item.category = request.POST.get('category')
         item.source = request.POST.get('source')
-        item.price = int(request.POST.get('price'))
+        item.price = price
         
         item.save()
         

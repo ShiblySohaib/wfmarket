@@ -12,7 +12,7 @@ class Item(TimestampedModel):
     category = models.CharField(max_length=50)
     source = models.CharField(max_length=100, blank=True, null=True)
     quantity = models.PositiveIntegerField(default=1)
-    price = models.PositiveIntegerField(default=25000)
+    price = models.PositiveIntegerField(blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} (x{self.quantity})"

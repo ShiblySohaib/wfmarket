@@ -49,7 +49,7 @@
                             <td class="item-source">{{ item.source|title }}</td>
                             <td class="item-price">{{ item.price|floatformat:0 }}</td>
                             <td class="item-actions">
-                                <button class="btn btn-edit" onclick="editItem({{ item.id }}, '{{ item.name|escapejs }}', {{ item.quantity }}, '{{ item.category|escapejs }}', '{{ item.source|escapejs }}', {{ item.price }})" title="Edit item">
+                                <button class="btn btn-edit" onclick="editItem({{ item.id }}, '{{ item.name|escapejs }}', {{ item.quantity }}, '{{ item.category|escapejs }}', '{{ item.source|escapejs }}', {% if item.price %}{{ item.price }}{% else %}''{% endif %})" title="Edit item">
                                     <i class="fas fa-edit"></i>
                                 </button>
                                 <button class="btn btn-delete" onclick="deleteItem({{ item.id }}, '{{ item.name|escapejs }}')" title="Delete item">
@@ -140,15 +140,23 @@
             </div>
             <div class="form-group">
                 <label for="editCategory">Category:</label>
-                <input type="text" id="editCategory" name="category" required>
+                <select id="editCategory" name="category" required>
+                    <option value="">Select category...</option>
+                    <option value="mod">Mod</option>
+                    <option value="wfpart">Warframe Part</option>
+                    <option value="wppart">Weapon Part</option>
+                    <option value="warframe">Warframe Set</option>
+                    <option value="weapon">Weapon Set</option>
+                    <option value="misc">Misc</option>
+                </select>
             </div>
             <div class="form-group">
                 <label for="editSource">Source:</label>
                 <input type="text" id="editSource" name="source">
             </div>
             <div class="form-group">
-                <label for="editPrice">Price:</label>
-                <input type="number" id="editPrice" name="price" min="0" required>
+                <label for="editPrice">Price (Platinum):</label>
+                <input type="number" id="editPrice" name="price" min="0" step="0.01">
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
@@ -676,11 +684,13 @@ document.addEventListener('DOMContentLoaded', function() {
         const formData = new FormData(editForm);
         const itemId = formData.get('item_id');
         
-        fetch(`/inventory/edit/${itemId}/`, {
+        fetch(`/edit/${itemId}/`, {
             method: 'POST',
             body: formData,
             headers: {
                 'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                // Don't set Content-Type header when using FormData
+                // The browser will set it with the proper boundary string
             }
         })
         .then(response => response.json())
@@ -704,11 +714,13 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const formData = new FormData(addForm);
         
-        fetch('/inventory/add/', {
+        fetch('/add/', {
             method: 'POST',
             body: formData,
             headers: {
                 'X-CSRFToken': formData.get('csrfmiddlewaretoken'),
+                // Don't set Content-Type header when using FormData
+                // The browser will set it with the proper boundary string
             }
         })
         .then(response => response.json())
@@ -743,9 +755,18 @@ function editItem(id, name, quantity, category, source, price) {
     document.getElementById('editItemId').value = id;
     document.getElementById('editName').value = name;
     document.getElementById('editQuantity').value = quantity;
-    document.getElementById('editCategory').value = category;
+    
+    // Set the category dropdown to the correct value
+    const categorySelect = document.getElementById('editCategory');
+    for(let i = 0; i < categorySelect.options.length; i++) {
+        if(categorySelect.options[i].value === category) {
+            categorySelect.selectedIndex = i;
+            break;
+        }
+    }
+    
     document.getElementById('editSource').value = source;
-    document.getElementById('editPrice').value = price;
+    document.getElementById('editPrice').value = price || '';
     
     document.getElementById('editModal').style.display = 'block';
 }
@@ -756,7 +777,7 @@ function closeEditModal() {
 
 function deleteItem(id, name) {
     if (confirm(`Are you sure you want to delete "${name}"?`)) {
-        fetch(`/inventory/delete/${id}/`, {
+        fetch(`/delete/${id}/`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
