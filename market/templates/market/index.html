@@ -1279,19 +1279,19 @@ function fetchMarketData() {
                     
                     updateProgress(100);
                     
-                    // Check if data has actually changed before updating timestamp
+                    // Check if data has actually changed
                     const dataChanged = hasDataChanged(data.market_data);
-                    if (dataChanged) {
-                        lastFetchTime = new Date();
-                    }
+                    
+                    // Always update the fetch time when the fetch is complete
+                    lastFetchTime = new Date();
                     
                     // Store failed items for modal (only when complete)
                     if (data.failed_items && data.failed_items.length > 0) {
                         failedItemsList = data.failed_items;
                     }
                     
-                    // Save final data to localStorage, update timestamp only if data changed
-                    saveToLocalStorage(data.market_data, data.failed_items, dataChanged);
+                    // Always save final data and update timestamp to localStorage
+                    saveToLocalStorage(data.market_data, data.failed_items, true);
                     
                     // Show refresh card and hide progress card
                     setTimeout(() => {
@@ -1552,11 +1552,13 @@ function refreshMarketDataInBackground() {
                                 failedItemsList = progressData.failed_items;
                             }
                             
+                            // Update last fetch time
+                            lastFetchTime = new Date();
+                            
                             // Save updated data to localStorage with timestamp update
                             saveToLocalStorage(progressData.market_data, progressData.failed_items, true);
                             
-                            // Update last fetch time and display
-                            lastFetchTime = new Date();
+                            // Update display
                             updateLastUpdatedTime();
                             
                         } else {
