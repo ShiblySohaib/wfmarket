@@ -1726,7 +1726,7 @@ function copyWhisper(buyer, itemName, platinum, quantity) {
     // Copy to clipboard
     navigator.clipboard.writeText(whisperMessage).then(function() {
         // Show success notification
-        showNotification('Whisper message copied to clipboard!');
+        showNotification('Whisper copied!');
     }, function(err) {
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
@@ -1735,7 +1735,7 @@ function copyWhisper(buyer, itemName, platinum, quantity) {
         textArea.select();
         document.execCommand('copy');
         document.body.removeChild(textArea);
-        showNotification('Whisper message copied to clipboard!');
+        showNotification('Whisper copied!');
     });
 }
 
