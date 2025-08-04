@@ -303,7 +303,7 @@ def fetch_market_data_background(session_id, items):
         }, 600)
     
     # First pass - fetch all items with progress updates
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
         future_to_item = {
             executor.submit(fetch_item_orders, item.name, rate_limiter): item 
             for item in items
@@ -363,10 +363,18 @@ def fetch_market_data_background(session_id, items):
     # Update progress after first pass
     update_full_data('retrying' if retry_queue else 'completing')
     
-    # Retry rate-limited items
-    if retry_queue:
+    # Retry rate-limited items until there are no more to retry
+    max_retry_attempts = 10  # Limit to avoid infinite loops
+    retry_attempt = 0
+    
+    while retry_queue and retry_attempt < max_retry_attempts:
+        retry_attempt += 1
+        next_retry_queue = []  # For items that need another retry
+        
         time.sleep(2)  # Wait a bit before retrying
-        with ThreadPoolExecutor(max_workers=3) as executor:
+        update_full_data(f'retrying (attempt {retry_attempt})')
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
             retry_futures = {
                 executor.submit(fetch_item_orders, item_name, rate_limiter): item_name 
                 for item_name in retry_queue
@@ -400,9 +408,9 @@ def fetch_market_data_background(session_id, items):
                         # Update progress bar on retry success
                         update_progress_only('retrying')
                     elif result['status'] == 'rate_limited':
-                        # Still rate limited on retry - don't add to failed items
-                        # This is expected behavior and not a permanent failure
-                        log_rate_limit(f"{item_name} (retry)")
+                        # Still rate limited - add to next retry queue
+                        log_rate_limit(f"{item_name} (retry attempt {retry_attempt})")
+                        next_retry_queue.append(item_name)
                     else:
                         # Only add to failed items if it's a real failure (not rate limiting)
                         failed_items.append({
@@ -416,6 +424,17 @@ def fetch_market_data_background(session_id, items):
                         'error': str(e),
                         'url': f"https://api.warframe.market/v1/items/{clean_item_name(item_name)}/orders"
                     })
+        
+        # Update retry queue with items that are still rate-limited
+        retry_queue = next_retry_queue
+        
+        # Update progress with current retry status
+        if retry_queue:
+            update_full_data(f'retrying (remaining: {len(retry_queue)})')
+        
+        # If there are no more items to retry, break the loop
+        if not retry_queue:
+            break
     
     # Final update - mark as complete
     update_full_data('complete')

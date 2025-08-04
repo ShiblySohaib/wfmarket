@@ -849,8 +849,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const hasItems = {{ has_items|yesno:"true,false" }};
     
     if (hasItems) {
-        // First check if server just started
-        checkServerStartupStatus();
+        // Check if we've already loaded data in this browser session
+        const hasLoadedInitialData = sessionStorage.getItem('wfmarket_initial_data_loaded');
+        
+        if (!hasLoadedInitialData) {
+            // First check if server just started
+            checkServerStartupStatus();
+            // Mark as loaded in this session
+            sessionStorage.setItem('wfmarket_initial_data_loaded', 'true');
+        } else {
+            // Skip server check and load from local storage directly
+            loadFromLocalStorageOrFetch();
+        }
     }
     
     // Initialize search functionality
