@@ -82,8 +82,8 @@ def clean_item_name(name):
     name = name.lower()
     # Replace spaces with underscores
     name = name.replace(" ", "_")
-    # Remove all other non-alphanumeric characters except underscores
-    cleaned = re.sub(r"[^a-z0-9_]", "", name)
+    # Remove all other non-alphanumeric characters except underscores and parentheses
+    cleaned = re.sub(r"[^a-z0-9_()]", "", name)
     # Remove multiple consecutive underscores
     cleaned = re.sub(r"_+", "_", cleaned)
     # Remove leading/trailing underscores
