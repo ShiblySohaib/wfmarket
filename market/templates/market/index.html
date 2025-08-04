@@ -7,7 +7,7 @@
 {% block content %}
 <div class="search-section">
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search items, buyers, categories..." class="search-input">
+        <input type="text" id="searchInput" placeholder="Search items, buyers, categories, ranks..." class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
     <div class="filter-container">
@@ -1120,11 +1120,13 @@ function filterTable(searchTerm) {
             const category = row.querySelector('.market-category')?.textContent.toLowerCase() || '';
             const source = row.querySelector('.market-source')?.textContent.toLowerCase() || '';
             const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
+            const rank = row.querySelector('.market-rank')?.textContent.toLowerCase() || '';
             
             const matches = item.includes(searchTerm) || 
                            category.includes(searchTerm) || 
                            source.includes(searchTerm) || 
-                           buyer.includes(searchTerm);
+                           buyer.includes(searchTerm) ||
+                           rank.includes(searchTerm);
             
             if (!matches) {
                 shouldShow = false;
