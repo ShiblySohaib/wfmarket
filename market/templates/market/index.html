@@ -843,7 +843,7 @@ let failedItemsList = []; // Store failed items for modal
 const MARKET_DATA_KEY = 'wfmarket_data';
 const LAST_FETCH_TIME_KEY = 'wfmarket_last_fetch';
 const FAILED_ITEMS_KEY = 'wfmarket_failed_items';
-const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+const AUTO_REFRESH_INTERVAL = {{ auto_refresh_interval }} * 1000; // Server-configured interval in milliseconds
 
 document.addEventListener('DOMContentLoaded', function() {
     const hasItems = {{ has_items|yesno:"true,false" }};
@@ -1457,11 +1457,11 @@ function startAutoRefresh() {
         clearInterval(autoRefreshInterval);
     }
     
-    // Start auto-refresh every 2 minutes (120000 ms)
+    // Start auto-refresh at the configured interval
     autoRefreshInterval = setInterval(() => {
         console.log('Auto-refreshing market data...');
         refreshMarketDataInBackground();
-    }, 120000);
+    }, AUTO_REFRESH_INTERVAL);
 }
 
 function refreshMarketDataInBackground() {

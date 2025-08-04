@@ -15,6 +15,9 @@ import uuid
 
 logger = logging.getLogger(__name__)
 
+# Configuration variables
+AUTO_REFRESH_INTERVAL = 120  # Auto-refresh interval in seconds (2 minutes)
+
 # ANSI color codes for colored terminal output
 class Colors:
     BLUE = '\033[94m'
@@ -161,7 +164,8 @@ def index(request):
     
     return render(request, 'market/index.html', {
         'total_items': len(items),
-        'has_items': len(items) > 0
+        'has_items': len(items) > 0,
+        'auto_refresh_interval': AUTO_REFRESH_INTERVAL  # Pass auto refresh interval to template
     })
 
 def fetch_market_data(request):
@@ -195,7 +199,7 @@ def fetch_market_data(request):
             'progress': 0,
             'processed_items': 0,
             'total_items': len(items)
-        }, 300)  # 5 minutes timeout
+        }, 600)  # 10 minutes timeout
         
         # Start background fetch
         thread = threading.Thread(target=fetch_market_data_background, args=(session_id, list(items)))
@@ -225,13 +229,13 @@ def fetch_market_data(request):
         server_startup_time = cache.get('server_startup_time')
         initial_data_loaded = cache.get('initial_data_loaded', False)
         
-        # If server started recently (within 5 minutes) and no initial data loaded
+        # If server started recently (within 10 minutes) and no initial data loaded
         if server_startup_time and not initial_data_loaded:
             current_time = time.time()
             time_since_start = current_time - server_startup_time
             
-            # If server started within 5 minutes and no initial load happened
-            if time_since_start < 300:  # 5 minutes
+            # If server started within 10 minutes and no initial load happened
+            if time_since_start < 600:  # 10 minutes
                 return JsonResponse({
                     'should_load_immediately': True,
                     'reason': 'server_startup'
@@ -278,7 +282,7 @@ def fetch_market_data_background(session_id, items):
             'total_items': total_items
         })
         
-        cache.set(f'fetch_progress_{session_id}', existing_data, 300)
+        cache.set(f'fetch_progress_{session_id}', existing_data, 600)
     
     def update_full_data(status='fetching'):
         """Update full data including market_data and failed_items"""
@@ -296,7 +300,7 @@ def fetch_market_data_background(session_id, items):
             'processed_items': processed_items,
             'successful_items': successful_items,
             'total_items': total_items
-        }, 300)
+        }, 600)
     
     # First pass - fetch all items with progress updates
     with ThreadPoolExecutor(max_workers=5) as executor:
