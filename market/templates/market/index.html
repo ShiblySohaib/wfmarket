@@ -1019,11 +1019,16 @@ function displayCachedData() {
     console.log(`Loaded ${currentMarketData.length} cached market orders`);
 }
 
-function saveToLocalStorage(marketData, failedItems) {
+function saveToLocalStorage(marketData, failedItems, updateTimestamp = true) {
     try {
-        const now = new Date();
         localStorage.setItem(MARKET_DATA_KEY, JSON.stringify(marketData));
-        localStorage.setItem(LAST_FETCH_TIME_KEY, now.toISOString());
+        
+        // Only update the timestamp if explicitly requested
+        if (updateTimestamp) {
+            const now = new Date();
+            localStorage.setItem(LAST_FETCH_TIME_KEY, now.toISOString());
+        }
+        
         localStorage.setItem(FAILED_ITEMS_KEY, JSON.stringify(failedItems || []));
         console.log(`Saved ${marketData.length} market orders to local storage`);
     } catch (error) {
@@ -1263,15 +1268,20 @@ function fetchMarketData() {
                     progressPollingInterval = null;
                     
                     updateProgress(100);
-                    lastFetchTime = new Date();
+                    
+                    // Check if data has actually changed before updating timestamp
+                    const dataChanged = hasDataChanged(data.market_data);
+                    if (dataChanged) {
+                        lastFetchTime = new Date();
+                    }
                     
                     // Store failed items for modal (only when complete)
                     if (data.failed_items && data.failed_items.length > 0) {
                         failedItemsList = data.failed_items;
                     }
                     
-                    // Save final data to localStorage
-                    saveToLocalStorage(data.market_data, data.failed_items);
+                    // Save final data to localStorage, update timestamp only if data changed
+                    saveToLocalStorage(data.market_data, data.failed_items, dataChanged);
                     
                     // Show refresh card and hide progress card
                     setTimeout(() => {
@@ -1532,8 +1542,8 @@ function refreshMarketDataInBackground() {
                                 failedItemsList = progressData.failed_items;
                             }
                             
-                            // Save updated data to localStorage
-                            saveToLocalStorage(progressData.market_data, progressData.failed_items);
+                            // Save updated data to localStorage with timestamp update
+                            saveToLocalStorage(progressData.market_data, progressData.failed_items, true);
                             
                             // Update last fetch time and display
                             lastFetchTime = new Date();
