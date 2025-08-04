@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 
 # Configuration variables
 AUTO_REFRESH_INTERVAL = 120  # Auto-refresh interval in seconds (2 minutes)
-HIGH_ALERT_THRESHOLD = 20  # High alert threshold
-ALERT_THRESHOLD = 15  # Alert threshold
+HIGH_ALERT_THRESHOLD = 11  # High alert threshold
+ALERT_THRESHOLD = 8  # Alert threshold
 
 # ANSI color codes for colored terminal output
 class Colors:
