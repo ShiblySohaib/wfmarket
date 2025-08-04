@@ -23,10 +23,10 @@ class Command(BaseCommand):
         
         # Common values for all items
         common_data = {
-            'category': 'mods',
-            'source': 'red veil',
+            'category': 'arcane',
+            'source': 'arbitration',
             'quantity': 1,
-            'price': 25000,
+            'price': 10,
         }
         
         created_count = 0
