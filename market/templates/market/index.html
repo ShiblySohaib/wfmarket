@@ -1616,37 +1616,13 @@ function refreshMarketDataInBackground() {
 function populateTable(marketData) {
     const tbody = document.getElementById('marketTableBody');
     
-    // Get existing rows
-    const existingRows = Array.from(tbody.querySelectorAll('tr'));
+    // Clear existing content immediately
+    tbody.innerHTML = '';
     
-    // Create a more sophisticated comparison
-    const createRowKey = (order) => `${order.item}-${order.buyer}-${order.platinum}-${order.order_quantity}`;
-    
-    // Map existing rows by their data
-    const existingRowMap = new Map();
-    existingRows.forEach((row, index) => {
-        const item = row.querySelector('.market-item')?.textContent;
-        const buyer = row.querySelector('.market-buyer')?.textContent?.split('(')[0]?.trim();
-        const platinum = row.querySelector('.market-platinum')?.textContent;
-        const quantity = row.querySelector('.market-order-qty')?.textContent;
-        
-        if (item && buyer && platinum && quantity) {
-            const key = `${item}-${buyer}-${platinum}-${quantity}`;
-            existingRowMap.set(key, { row, index });
-        }
-    });
-    
-    // Create new row elements
-    const newRows = [];
-    const newRowKeys = new Set();
-    
-    marketData.forEach((order, index) => {
-        const rowKey = createRowKey(order);
-        newRowKeys.add(rowKey);
-        
+    // Create all rows at once without animations
+    marketData.forEach((order) => {
         const row = document.createElement('tr');
         row.className = 'market-row';
-        row.dataset.rowKey = rowKey;
         
         // Add unaffordable class if not affordable
         if (order.is_affordable === false) {
@@ -1677,72 +1653,13 @@ function populateTable(marketData) {
             </td>
         `;
         
-        // Check if this is a new row
-        const isNewRow = !existingRowMap.has(rowKey);
-        if (isNewRow) {
-            row.classList.add('new-row');
-            // Set initial animation state
-            row.style.opacity = '0';
-            row.style.transform = 'translateY(15px) scale(0.98)';
-        }
-        
-        newRows.push({ row, isNew: isNewRow, index });
+        tbody.appendChild(row);
     });
-    
-    // Remove rows that are no longer in the data
-    existingRows.forEach(row => {
-        const rowKey = row.dataset.rowKey;
-        if (rowKey && !newRowKeys.has(rowKey)) {
-            row.style.transition = 'opacity 0.2s ease-out, transform 0.2s ease-out';
-            row.style.opacity = '0';
-            row.style.transform = 'translateX(-20px) scale(0.98)';
-            setTimeout(() => {
-                if (row.parentNode) {
-                    row.parentNode.removeChild(row);
-                }
-            }, 200);
-        }
-    });
-    
-    // Clear and add all rows
-    setTimeout(() => {
-        tbody.innerHTML = '';
-        
-        newRows.forEach(({ row, isNew, index }) => {
-            tbody.appendChild(row);
-            
-            if (isNew) {
-                // Animate new rows in with staggered timing
-                setTimeout(() => {
-                    row.style.transition = 'opacity 0.3s ease-out, transform 0.3s ease-out';
-                    row.style.opacity = '1';
-                    row.style.transform = 'translateY(0) scale(1)';
-                    
-                    // Add special highlight for new rows
-                    setTimeout(() => {
-                        row.style.transition = 'background-color 0.2s ease-out';
-                        row.style.backgroundColor = 'rgba(var(--accent-blue-rgb), 0.15)';
-                        
-                        setTimeout(() => {
-                            row.style.backgroundColor = '';
-                            row.classList.remove('new-row');
-                        }, 500);
-                    }, 100);
-                }, index * 30); // Stagger by 30ms per row
-            } else {
-                // Existing rows appear immediately
-                row.style.opacity = '1';
-                row.style.transform = 'translateY(0) scale(1)';
-            }
-        });
-    }, 100); // Small delay to allow exit animations
     
     // Reapply search filter and affordability filter after table update
-    setTimeout(() => {
-        const searchInput = document.getElementById('searchInput');
-        const searchTerm = searchInput && searchInput.value.trim() ? searchInput.value.toLowerCase().trim() : '';
-        filterTable(searchTerm);
-    }, 200);
+    const searchInput = document.getElementById('searchInput');
+    const searchTerm = searchInput && searchInput.value.trim() ? searchInput.value.toLowerCase().trim() : '';
+    filterTable(searchTerm);
 }
 
 function copyWhisper(buyer, itemName, platinum, quantity) {
