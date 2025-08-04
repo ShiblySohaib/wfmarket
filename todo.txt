@@ -1,4 +1,0 @@
-COMPLETED:
-- Removed the limitation that showed only top 5 market results for each item. Now showing all available orders.
-- Improved the hasDataChanged function to properly compare data content instead of just length, ensuring proper detection of data changes.
-- Fixed "Last updated" timestamp to only update when data actually changes, not on every fetch operation.
