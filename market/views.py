@@ -316,7 +316,7 @@ def fetch_market_data_background(session_id, items):
                     successful_items += 1  # Only increment on success
                     # Process successful results
                     is_affordable = is_item_affordable(item, source_balances)
-                    for order in result['data'][:5]:  # Limit to top 5 orders per item
+                    for order in result['data']:  # Show all orders per item
                         market_data.append({
                             'item': item.name,
                             'item_id': item.id,
@@ -377,7 +377,7 @@ def fetch_market_data_background(session_id, items):
                         item = next((i for i in items if i.name == item_name), None)
                         if item:
                             is_affordable = is_item_affordable(item, source_balances)
-                            for order in result['data'][:5]:
+                            for order in result['data']:  # Show all orders per item
                                 market_data.append({
                                     'item': item.name,
                                     'item_id': item.id,
