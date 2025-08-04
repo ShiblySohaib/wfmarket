@@ -47,7 +47,10 @@
         </div>
         <div class="refresh-card" id="refreshCard" style="display: none;">
             <div class="refresh-container">
-                <div class="last-updated" id="lastUpdated">Last updated: Just now</div>
+                <div class="last-updated" id="lastUpdated">
+                    <i class="fas fa-circle status-indicator" id="statusIndicator"></i>
+                    Last updated: Just now
+                </div>
                 <button class="btn btn-refresh" onclick="refreshMarketData()" title="Refresh market data">
                     <i class="fas fa-sync-alt" id="refreshIcon"></i>
                     Refresh
@@ -531,6 +534,19 @@
     color: var(--text-secondary);
     font-size: 0.85rem;
     white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-indicator {
+    color: var(--accent-blue);
+    font-size: 0.85rem;
+    transition: color 0.3s ease;
+}
+
+.status-indicator.fetching {
+    color: #4caf50;
 }
 
 .btn-refresh {
@@ -823,16 +839,244 @@ let progressPollingInterval = null;
 let autoRefreshInterval = null; // For 2-minute auto refresh
 let failedItemsList = []; // Store failed items for modal
 
+// Local storage keys
+const MARKET_DATA_KEY = 'wfmarket_data';
+const LAST_FETCH_TIME_KEY = 'wfmarket_last_fetch';
+const FAILED_ITEMS_KEY = 'wfmarket_failed_items';
+const AUTO_REFRESH_INTERVAL = 2 * 60 * 1000; // 2 minutes in milliseconds
+
 document.addEventListener('DOMContentLoaded', function() {
     const hasItems = {{ has_items|yesno:"true,false" }};
     
     if (hasItems) {
-        fetchMarketData();
+        // First check if server just started
+        checkServerStartupStatus();
     }
     
     // Initialize search functionality
     initializeSearch();
 });
+
+function checkServerStartupStatus() {
+    fetch('/market/fetch-data/?action=check_server_start', {
+        method: 'GET',
+        headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.should_load_immediately) {
+            console.log('Server startup detected, loading fresh data...');
+            // Clear any existing localStorage since server restarted
+            clearLocalStorage();
+            fetchMarketData();
+        } else {
+            // Server didn't just start, only use cached data if available
+            loadFromLocalStorageOrFetch();
+        }
+    })
+    .catch(error => {
+        console.error('Error checking server startup status:', error);
+        // Fallback: only use cached data, don't fetch fresh data
+        loadFromLocalStorageOrFetch();
+    });
+}
+
+function shouldUseCachedData() {
+    const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
+    const cachedData = localStorage.getItem(MARKET_DATA_KEY);
+    
+    if (!cachedTime || !cachedData) {
+        return false;
+    }
+    
+    const lastFetch = new Date(cachedTime);
+    const now = new Date();
+    const timeDiff = now - lastFetch;
+    
+    // Use cached data if it's less than 2 minutes old
+    return timeDiff < AUTO_REFRESH_INTERVAL;
+}
+
+function loadFromLocalStorage() {
+    try {
+        const cachedData = localStorage.getItem(MARKET_DATA_KEY);
+        const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
+        const cachedFailedItems = localStorage.getItem(FAILED_ITEMS_KEY);
+        
+        if (cachedData && cachedTime) {
+            console.log('Loading market data from local storage...');
+            
+            // Parse cached data
+            currentMarketData = JSON.parse(cachedData);
+            lastFetchTime = new Date(cachedTime);
+            
+            if (cachedFailedItems) {
+                failedItemsList = JSON.parse(cachedFailedItems);
+            }
+            
+            // Update UI with cached data
+            displayCachedData();
+            
+            // Start auto-refresh timer for the remaining time
+            startAutoRefreshWithRemainingTime();
+        }
+    } catch (error) {
+        console.error('Error loading from localStorage:', error);
+        // If there's an error, clear cache and fetch fresh data
+        clearLocalStorage();
+        fetchMarketData();
+    }
+}
+
+function loadFromLocalStorageOrFetch() {
+    try {
+        const cachedData = localStorage.getItem(MARKET_DATA_KEY);
+        const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
+        const cachedFailedItems = localStorage.getItem(FAILED_ITEMS_KEY);
+        
+        if (cachedData && cachedTime) {
+            console.log('Loading market data from local storage...');
+            
+            // Parse cached data
+            currentMarketData = JSON.parse(cachedData);
+            lastFetchTime = new Date(cachedTime);
+            
+            if (cachedFailedItems) {
+                failedItemsList = JSON.parse(cachedFailedItems);
+            }
+            
+            // Update UI with cached data
+            displayCachedData();
+            
+            // Check if interval time has passed and trigger background refresh if needed
+            const now = new Date();
+            const timeSinceLastFetch = now - lastFetchTime;
+            
+            if (timeSinceLastFetch >= AUTO_REFRESH_INTERVAL) {
+                console.log('Interval time has passed, starting background refresh...');
+                // Start background refresh immediately
+                refreshMarketDataInBackground();
+            } else {
+                // Start auto-refresh timer for the remaining time
+                startAutoRefreshWithRemainingTime();
+            }
+        } else {
+            console.log('No cached data found, fetching fresh data...');
+            fetchMarketData();
+        }
+    } catch (error) {
+        console.error('Error loading from localStorage:', error);
+        // If there's an error, clear cache and fetch fresh data
+        clearLocalStorage();
+        fetchMarketData();
+    }
+}
+
+function displayCachedData() {
+    const loadingState = document.getElementById('loadingState');
+    const tableContainer = document.getElementById('tableContainer');
+    const progressCard = document.getElementById('progressCard');
+    const refreshCard = document.getElementById('refreshCard');
+    const activeOrdersCount = document.getElementById('activeOrdersCount');
+    const failedItemsCount = document.getElementById('failedItemsCount');
+    const failedCard = document.getElementById('failedCard');
+    
+    // Hide loading and progress states
+    if (loadingState) {
+        loadingState.style.display = 'none';
+    }
+    progressCard.style.display = 'none';
+    
+    // Show refresh card
+    refreshCard.style.display = 'flex';
+    
+    // Update stats
+    activeOrdersCount.textContent = currentMarketData.length;
+    failedItemsCount.textContent = failedItemsList.length;
+    
+    // Show/hide failed card
+    if (failedItemsList.length > 0) {
+        failedCard.style.display = 'flex';
+    } else {
+        failedCard.style.display = 'none';
+    }
+    
+    // Populate table with cached data
+    if (currentMarketData.length > 0) {
+        populateTable(currentMarketData);
+        tableContainer.style.display = 'block';
+    }
+    
+    // Update last updated time
+    updateLastUpdatedTime();
+    startTimeUpdateInterval();
+    
+    // Set status indicator to idle (blue)
+    setStatusIndicator('idle');
+    
+    console.log(`Loaded ${currentMarketData.length} cached market orders`);
+}
+
+function saveToLocalStorage(marketData, failedItems) {
+    try {
+        const now = new Date();
+        localStorage.setItem(MARKET_DATA_KEY, JSON.stringify(marketData));
+        localStorage.setItem(LAST_FETCH_TIME_KEY, now.toISOString());
+        localStorage.setItem(FAILED_ITEMS_KEY, JSON.stringify(failedItems || []));
+        console.log(`Saved ${marketData.length} market orders to local storage`);
+    } catch (error) {
+        console.error('Error saving to localStorage:', error);
+        // If localStorage is full or unavailable, continue without caching
+    }
+}
+
+function clearLocalStorage() {
+    try {
+        localStorage.removeItem(MARKET_DATA_KEY);
+        localStorage.removeItem(LAST_FETCH_TIME_KEY);
+        localStorage.removeItem(FAILED_ITEMS_KEY);
+        console.log('Cleared market data from local storage');
+    } catch (error) {
+        console.error('Error clearing localStorage:', error);
+    }
+}
+
+function startAutoRefreshWithRemainingTime() {
+    const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
+    if (!cachedTime) {
+        startAutoRefresh();
+        return;
+    }
+    
+    const lastFetch = new Date(cachedTime);
+    const now = new Date();
+    const timeSinceLastFetch = now - lastFetch;
+    const remainingTime = AUTO_REFRESH_INTERVAL - timeSinceLastFetch;
+    
+    if (remainingTime <= 0) {
+        // Time has already passed, start refresh immediately
+        refreshMarketDataInBackground();
+    } else {
+        // Wait for the remaining time, then start normal auto-refresh
+        console.log(`Next auto-refresh in ${Math.round(remainingTime / 1000)} seconds`);
+        setTimeout(() => {
+            refreshMarketDataInBackground();
+        }, remainingTime);
+    }
+}
+
+function setStatusIndicator(status) {
+    const statusIndicator = document.getElementById('statusIndicator');
+    if (statusIndicator) {
+        if (status === 'fetching') {
+            statusIndicator.classList.add('fetching');
+        } else {
+            statusIndicator.classList.remove('fetching');
+        }
+    }
+}
 
 function initializeSearch() {
     const searchInput = document.getElementById('searchInput');
@@ -915,6 +1159,8 @@ window.addEventListener('beforeunload', function() {
 });
 
 function fetchMarketData() {
+    console.log('Fetching fresh market data...');
+    
     const progressCard = document.getElementById('progressCard');
     const refreshCard = document.getElementById('refreshCard');
     const refreshBtn = document.querySelector('.btn-refresh');
@@ -1024,6 +1270,9 @@ function fetchMarketData() {
                         failedItemsList = data.failed_items;
                     }
                     
+                    // Save final data to localStorage
+                    saveToLocalStorage(data.market_data, data.failed_items);
+                    
                     // Show refresh card and hide progress card
                     setTimeout(() => {
                         progressCard.style.display = 'none';
@@ -1038,6 +1287,9 @@ function fetchMarketData() {
                         // Start time update interval
                         updateLastUpdatedTime();
                         startTimeUpdateInterval();
+                        
+                        // Set status indicator to idle (blue)
+                        setStatusIndicator('idle');
                         
                         // Start auto-refresh for future updates
                         startAutoRefresh();
@@ -1077,6 +1329,9 @@ function fetchMarketData() {
 }
 
 function refreshMarketData() {
+    // Clear cached data when manually refreshing
+    clearLocalStorage();
+    
     // Cancel any ongoing polling and auto-refresh
     if (progressPollingInterval) {
         clearInterval(progressPollingInterval);
@@ -1144,7 +1399,14 @@ function updateLastUpdatedTime() {
         nextUpdateIn = 3600 - (diff % 3600);
     }
     
-    lastUpdatedElement.textContent = `Last updated: ${timeText}`;
+    // Preserve the status indicator's current state
+    const statusIndicator = document.getElementById('statusIndicator');
+    const isFetching = statusIndicator && statusIndicator.classList.contains('fetching');
+    
+    lastUpdatedElement.innerHTML = `
+        <i class="fas fa-circle status-indicator${isFetching ? ' fetching' : ''}" id="statusIndicator"></i>
+        Last updated: ${timeText}
+    `;
     return nextUpdateIn;
 }
 
@@ -1186,6 +1448,9 @@ function refreshMarketDataInBackground() {
         return;
     }
     
+    // Set status indicator to fetching (green)
+    setStatusIndicator('fetching');
+    
     // Store the current data to compare later
     const previousData = [...currentMarketData];
     const previousFailedCount = failedItemsList.length;
@@ -1214,6 +1479,9 @@ function refreshMarketDataInBackground() {
                 .then(progressData => {
                     if (progressData.status === 'complete') {
                         clearInterval(silentPoll);
+                        
+                        // Set status indicator back to idle (blue)
+                        setStatusIndicator('idle');
                         
                         // Check if data has actually changed
                         const dataChanged = hasDataChanged(progressData.market_data);
@@ -1251,6 +1519,9 @@ function refreshMarketDataInBackground() {
                                 failedItemsList = progressData.failed_items;
                             }
                             
+                            // Save updated data to localStorage
+                            saveToLocalStorage(progressData.market_data, progressData.failed_items);
+                            
                             // Update last fetch time and display
                             lastFetchTime = new Date();
                             updateLastUpdatedTime();
@@ -1258,17 +1529,26 @@ function refreshMarketDataInBackground() {
                         } else {
                             console.log('No data changes detected, skipping UI update');
                         }
+                        
+                        // Always restart auto-refresh timer after background refresh completes
+                        startAutoRefresh();
                     }
                 })
                 .catch(error => {
                     console.error('Error in silent polling:', error);
                     clearInterval(silentPoll);
+                    // Set status indicator back to idle on error
+                    setStatusIndicator('idle');
+                    // Restart auto-refresh even if there was an error
+                    startAutoRefresh();
                 });
             }, 1000);
         }
     })
     .catch(error => {
         console.error('Error starting background refresh:', error);
+        // Set status indicator back to idle on error
+        setStatusIndicator('idle');
     });
 }
 

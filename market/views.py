@@ -152,6 +152,13 @@ def index(request):
     """Market page - loads immediately, data fetched via AJAX"""
     items = Item.objects.all()
     
+    # Check if this is a fresh server start and no cached data exists
+    server_startup_time = cache.get('server_startup_time')
+    if not server_startup_time:
+        # Mark server as just started
+        cache.set('server_startup_time', time.time(), None)  # Never expires
+        cache.set('initial_data_loaded', False, None)
+    
     return render(request, 'market/index.html', {
         'total_items': len(items),
         'has_items': len(items) > 0
@@ -212,6 +219,28 @@ def fetch_market_data(request):
             return JsonResponse({'error': 'Session not found or expired'}, status=404)
         
         return JsonResponse(progress_data)
+    
+    elif action == 'check_server_start':
+        # Check if server just started and initial data should be loaded
+        server_startup_time = cache.get('server_startup_time')
+        initial_data_loaded = cache.get('initial_data_loaded', False)
+        
+        # If server started recently (within 5 minutes) and no initial data loaded
+        if server_startup_time and not initial_data_loaded:
+            current_time = time.time()
+            time_since_start = current_time - server_startup_time
+            
+            # If server started within 5 minutes and no initial load happened
+            if time_since_start < 300:  # 5 minutes
+                return JsonResponse({
+                    'should_load_immediately': True,
+                    'reason': 'server_startup'
+                })
+        
+        return JsonResponse({
+            'should_load_immediately': False,
+            'reason': 'normal_operation'
+        })
     
     else:
         return JsonResponse({'error': 'Invalid action'}, status=400)
@@ -366,10 +395,15 @@ def fetch_market_data_background(session_id, items):
                         
                         # Update progress bar on retry success
                         update_progress_only('retrying')
+                    elif result['status'] == 'rate_limited':
+                        # Still rate limited on retry - don't add to failed items
+                        # This is expected behavior and not a permanent failure
+                        log_rate_limit(f"{item_name} (retry)")
                     else:
+                        # Only add to failed items if it's a real failure (not rate limiting)
                         failed_items.append({
                             'item': item_name,
-                            'error': result.get('error', 'Rate limit retry failed'),
+                            'error': result.get('error', 'Retry failed'),
                             'url': f"https://api.warframe.market/v1/items/{clean_item_name(item_name)}/orders"
                         })
                 except Exception as e:
@@ -381,6 +415,9 @@ def fetch_market_data_background(session_id, items):
     
     # Final update - mark as complete
     update_full_data('complete')
+    
+    # Mark initial data as loaded if this was the first load after server start
+    cache.set('initial_data_loaded', True, None)
     
     # Log completion
     success_count = len(market_data)
