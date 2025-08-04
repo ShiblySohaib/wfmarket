@@ -7,7 +7,7 @@
 {% block content %}
 <div class="search-section">
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search items..." class="search-input">
+        <input type="text" id="searchInput" placeholder="Search here..." class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
 </div>
@@ -632,10 +632,38 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = row.querySelector('.item-name').textContent.toLowerCase();
             const category = row.querySelector('.item-category').textContent.toLowerCase();
             const source = row.querySelector('.item-source').textContent.toLowerCase();
+            const quantity = row.querySelector('.item-quantity').textContent.toLowerCase();
+            const price = row.querySelector('.item-price').textContent.toLowerCase();
             
-            const matches = name.includes(searchTerm) || 
-                          category.includes(searchTerm) || 
-                          source.includes(searchTerm);
+            // Combine all searchable text
+            const allText = `${name} ${category} ${source} ${quantity} ${price}`;
+            
+            // Check if search term contains operators
+            let matches = false;
+            
+            if (searchTerm.includes('&')) {
+                // AND operator - all terms must be present
+                const andTerms = searchTerm.split('&').map(term => term.trim()).filter(term => term.length > 0);
+                matches = andTerms.every(term => {
+                    if (term.includes('|')) {
+                        // Handle OR within AND terms
+                        const orTerms = term.split('|').map(t => t.trim()).filter(t => t.length > 0);
+                        return orTerms.some(orTerm => allText.includes(orTerm));
+                    }
+                    return allText.includes(term);
+                });
+            } else if (searchTerm.includes('|')) {
+                // OR operator - any term must be present
+                const orTerms = searchTerm.split('|').map(term => term.trim()).filter(term => term.length > 0);
+                matches = orTerms.some(term => allText.includes(term));
+            } else {
+                // Simple search - check if any field contains the search term
+                matches = name.includes(searchTerm) || 
+                         category.includes(searchTerm) || 
+                         source.includes(searchTerm) ||
+                         quantity.includes(searchTerm) ||
+                         price.includes(searchTerm);
+            }
             
             if (matches) {
                 row.style.display = '';

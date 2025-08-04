@@ -7,7 +7,7 @@
 {% block content %}
 <div class="search-section">
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search items, buyers, categories, ranks..." class="search-input">
+        <input type="text" id="searchInput" placeholder="Search here..." class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
     <div class="filter-container">
@@ -1122,11 +1122,35 @@ function filterTable(searchTerm) {
             const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
             const rank = row.querySelector('.market-rank')?.textContent.toLowerCase() || '';
             
-            const matches = item.includes(searchTerm) || 
-                           category.includes(searchTerm) || 
-                           source.includes(searchTerm) || 
-                           buyer.includes(searchTerm) ||
-                           rank.includes(searchTerm);
+            // Combine all searchable text
+            const allText = `${item} ${category} ${source} ${buyer} ${rank}`;
+            
+            // Check if search term contains operators
+            let matches = false;
+            
+            if (searchTerm.includes('&')) {
+                // AND operator - all terms must be present
+                const andTerms = searchTerm.split('&').map(term => term.trim()).filter(term => term.length > 0);
+                matches = andTerms.every(term => {
+                    if (term.includes('|')) {
+                        // Handle OR within AND terms
+                        const orTerms = term.split('|').map(t => t.trim()).filter(t => t.length > 0);
+                        return orTerms.some(orTerm => allText.includes(orTerm));
+                    }
+                    return allText.includes(term);
+                });
+            } else if (searchTerm.includes('|')) {
+                // OR operator - any term must be present
+                const orTerms = searchTerm.split('|').map(term => term.trim()).filter(term => term.length > 0);
+                matches = orTerms.some(term => allText.includes(term));
+            } else {
+                // Simple search - check if any field contains the search term
+                matches = item.includes(searchTerm) || 
+                         category.includes(searchTerm) || 
+                         source.includes(searchTerm) || 
+                         buyer.includes(searchTerm) ||
+                         rank.includes(searchTerm);
+            }
             
             if (!matches) {
                 shouldShow = false;
