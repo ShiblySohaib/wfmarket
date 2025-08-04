@@ -1,0 +1,41 @@
+# Database files
+*.sqlite3
+db.sqlite3
+
+# Python bytecode / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.env
+.venv/
+
+# Distribution / packaging
+*.egg-info/
+.installed.cfg
+*.egg
+dist/
+build/
+develop-eggs/
+
+# Local development settings
+.env
+local_settings.py
+
+# Django stuff
+*.log
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
