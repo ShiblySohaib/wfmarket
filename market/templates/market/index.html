@@ -7,13 +7,12 @@
 {% block content %}
 <div class="search-section">
     <div class="search-container">
-        <input type="text" id="searchInput" placeholder="Search here..." class="search-input">
+        <input type="text" id="searchInput" placeholder="Search items, rank, buyer, source... Use & for AND, | for OR" class="search-input">
         <i class="fas fa-search search-icon"></i>
     </div>
     <div class="filter-container">
         <label class="checkbox-container">
             <input type="checkbox" id="showAffordableOnly" checked onchange="toggleAffordableFilter()">
-            <span class="checkmark"></span>
             Show affordable only
         </label>
     </div>
@@ -118,9 +117,6 @@
                     </tbody>
                 </table>
             </div>
-            <div class="failed-table-footer">
-                <!-- Footer text removed as requested -->
-            </div>
         </div>
     </div>
 </div>
@@ -128,10 +124,6 @@
 
 {% block extra_css %}
 <style>
-:root {
-    --accent-blue-rgb: 0, 212, 255; /* RGB values for accent-blue */
-}
-
 .search-section {
     display: flex;
     flex-direction: column;
@@ -207,35 +199,13 @@
     margin: 0;
 }
 
-/* Enhanced table transition styles */
+/* Market table styles */
 .market-table {
     border-collapse: separate;
     border-spacing: 0;
 }
 
-.market-row {
-    transition: all 0.3s ease;
-}
-
-.market-row.new-row {
-    animation: newRowHighlight 1s ease-out;
-}
-
-@keyframes newRowHighlight {
-    0% {
-        background-color: rgba(var(--accent-blue-rgb), 0.2);
-        transform: scale(1.005);
-    }
-    50% {
-        background-color: rgba(var(--accent-blue-rgb), 0.1);
-    }
-    100% {
-        background-color: transparent;
-        transform: scale(1);
-    }
-}
-
-/* Smooth hover transitions */
+/* Hover effects */
 .market-row:hover {
     background-color: var(--bg-tertiary);
     transform: translateY(-1px);
@@ -454,20 +424,6 @@
     font-size: 0.8rem;
     word-break: break-all;
     max-width: 300px;
-}
-
-.failed-table-footer {
-    padding: 15px 25px;
-    border-top: 1px solid var(--border-color);
-    background-color: var(--bg-tertiary);
-    border-radius: 0 0 12px 12px;
-}
-
-.failed-table-footer p {
-    color: var(--text-muted);
-    font-size: 0.9rem;
-    margin: 0;
-    text-align: center;
 }
 
 .progress-card {
@@ -891,53 +847,6 @@ function checkServerStartupStatus() {
         // Fallback: only use cached data, don't fetch fresh data
         loadFromLocalStorageOrFetch();
     });
-}
-
-function shouldUseCachedData() {
-    const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
-    const cachedData = localStorage.getItem(MARKET_DATA_KEY);
-    
-    if (!cachedTime || !cachedData) {
-        return false;
-    }
-    
-    const lastFetch = new Date(cachedTime);
-    const now = new Date();
-    const timeDiff = now - lastFetch;
-    
-    // Use cached data if it's less than 2 minutes old
-    return timeDiff < AUTO_REFRESH_INTERVAL;
-}
-
-function loadFromLocalStorage() {
-    try {
-        const cachedData = localStorage.getItem(MARKET_DATA_KEY);
-        const cachedTime = localStorage.getItem(LAST_FETCH_TIME_KEY);
-        const cachedFailedItems = localStorage.getItem(FAILED_ITEMS_KEY);
-        
-        if (cachedData && cachedTime) {
-            console.log('Loading market data from local storage...');
-            
-            // Parse cached data
-            currentMarketData = JSON.parse(cachedData);
-            lastFetchTime = new Date(cachedTime);
-            
-            if (cachedFailedItems) {
-                failedItemsList = JSON.parse(cachedFailedItems);
-            }
-            
-            // Update UI with cached data
-            displayCachedData();
-            
-            // Start auto-refresh timer for the remaining time
-            startAutoRefreshWithRemainingTime();
-        }
-    } catch (error) {
-        console.error('Error loading from localStorage:', error);
-        // If there's an error, clear cache and fetch fresh data
-        clearLocalStorage();
-        fetchMarketData();
-    }
 }
 
 function loadFromLocalStorageOrFetch() {
