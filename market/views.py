@@ -12,11 +12,14 @@ from inventory.models import Item
 from sources.models import SourceBalance
 import logging
 import uuid
+from params import ARI  # Import auto-refresh interval from params.py   
+
+
 
 logger = logging.getLogger(__name__)
 
 # Configuration variables
-AUTO_REFRESH_INTERVAL = 120  # Auto-refresh interval in seconds (2 minutes)
+AUTO_REFRESH_INTERVAL = ARI if ARI is not None else 120  # Auto-refresh interval in seconds (2 minutes)
 HIGH_ALERT_THRESHOLD = 11  # High alert threshold
 ALERT_THRESHOLD = 8  # Alert threshold
 
@@ -254,6 +257,9 @@ def fetch_market_data(request):
 def fetch_market_data_background(session_id, items):
     """Background function to fetch market data with progress updates"""
     
+    # Start timing
+    start_time = time.time()
+    
     # Log fetching start
     log_fetch_start(len(items))
     
@@ -443,6 +449,10 @@ def fetch_market_data_background(session_id, items):
     
     # Mark initial data as loaded if this was the first load after server start
     cache.set('initial_data_loaded', True, None)
+    
+    # Calculate and log total time
+    total_time = time.time() - start_time
+    colored_print(f"⏱️  Total fetch time: {total_time:.1f} seconds", Colors.BLUE)
     
     # Log completion
     success_count = len(market_data)

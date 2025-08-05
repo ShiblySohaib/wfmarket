@@ -1559,7 +1559,7 @@ function populateTable(marketData) {
             <td class="market-order-qty">${order.order_quantity}</td>
             <td class="market-rank">${rankText}</td>
             <td class="market-actions">
-                <button class="btn btn-whisper" onclick="copyWhisper('${order.buyer}', '${order.item}', ${order.platinum}, ${order.order_quantity})" title="Copy whisper message">
+                <button class="btn btn-whisper" onclick="copyWhisper('${order.buyer}', '${order.item}', ${order.platinum}, ${order.order_quantity}, ${order.rank})" title="Copy whisper message">
                     <i class="fas fa-comments"></i>
                     Whisper
                 </button>
@@ -1575,9 +1575,13 @@ function populateTable(marketData) {
     filterTable(searchTerm);
 }
 
-function copyWhisper(buyer, itemName, platinum, quantity) {
+function copyWhisper(buyer, itemName, platinum, quantity, rank) {
+    // Format the item name with rank
+    const rankValue = rank > 0 ? rank : 0; // Unranked is rank 0
+    const formattedItemName = `${itemName} (rank ${rankValue})`;
+    
     // Format the whisper message according to Warframe Market standards
-    const whisperMessage = `/w ${buyer} Hi! I want to sell: ${itemName} for ${platinum} platinum. (warframe.market)`;
+    const whisperMessage = `/w ${buyer} Hi! I want to sell: "${formattedItemName}" for ${platinum} platinum. (warframe.market)`;
     
     // Copy to clipboard
     navigator.clipboard.writeText(whisperMessage).then(function() {
