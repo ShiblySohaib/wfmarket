@@ -1019,57 +1019,90 @@ function initializeSearch() {
 function filterTable(searchTerm) {
     const table = document.getElementById('marketTable');
     if (!table) return;
-    
+
     const rows = table.querySelectorAll('tbody tr');
     const showAffordableOnly = document.getElementById('showAffordableOnly')?.checked || false;
     let visibleCount = 0;
-    
+
+    function tokenize(input) {
+        return input.match(/(!|\(|\)|\||&)|[^!()\|&\s]+/g)?.map(token => token.trim()).filter(Boolean) || [];
+    }
+
+    function parse(tokens) {
+        let i = 0;
+
+        function parseExpression() {
+            let node = parseTerm();
+            while (i < tokens.length && tokens[i] === '|') {
+                i++;
+                node = { type: 'OR', left: node, right: parseTerm() };
+            }
+            return node;
+        }
+
+        function parseTerm() {
+            let node = parseFactor();
+            while (i < tokens.length && tokens[i] === '&') {
+                i++;
+                node = { type: 'AND', left: node, right: parseFactor() };
+            }
+            return node;
+        }
+
+        function parseFactor() {
+            const token = tokens[i++];
+            if (token === '!') {
+                return { type: 'NOT', expr: parseFactor() };
+            } else if (token === '(') {
+                const node = parseExpression();
+                if (tokens[i] === ')') i++;
+                return node;
+            } else {
+                return { type: 'TERM', value: token.toLowerCase() };
+            }
+        }
+
+        return parseExpression();
+    }
+
+    function evaluate(node, text) {
+        switch (node.type) {
+            case 'TERM':
+                return text.includes(node.value);
+            case 'NOT':
+                return !evaluate(node.expr, text);
+            case 'AND':
+                return evaluate(node.left, text) && evaluate(node.right, text);
+            case 'OR':
+                return evaluate(node.left, text) || evaluate(node.right, text);
+            default:
+                return false;
+        }
+    }
+
+    let ast = null;
+    if (searchTerm) {
+        const tokens = tokenize(searchTerm);
+        ast = parse(tokens);
+    }
+
     rows.forEach(row => {
         let shouldShow = true;
-        
+
         // Apply search filter
-        if (searchTerm) {
+        if (ast) {
             const item = row.querySelector('.market-item')?.textContent.toLowerCase() || '';
             const category = row.querySelector('.market-category')?.textContent.toLowerCase() || '';
             const source = row.querySelector('.market-source')?.textContent.toLowerCase() || '';
             const buyer = row.querySelector('.market-buyer')?.textContent.toLowerCase() || '';
             const rank = row.querySelector('.market-rank')?.textContent.toLowerCase() || '';
-            
-            // Combine all searchable text
+
             const allText = `${item} ${category} ${source} ${buyer} ${rank}`;
-            
-            // Check if search term contains operators
-            let matches = false;
-            
-            if (searchTerm.includes('&')) {
-                // AND operator - all terms must be present
-                const andTerms = searchTerm.split('&').map(term => term.trim()).filter(term => term.length > 0);
-                matches = andTerms.every(term => {
-                    if (term.includes('|')) {
-                        // Handle OR within AND terms
-                        const orTerms = term.split('|').map(t => t.trim()).filter(t => t.length > 0);
-                        return orTerms.some(orTerm => allText.includes(orTerm));
-                    }
-                    return allText.includes(term);
-                });
-            } else if (searchTerm.includes('|')) {
-                // OR operator - any term must be present
-                const orTerms = searchTerm.split('|').map(term => term.trim()).filter(term => term.length > 0);
-                matches = orTerms.some(term => allText.includes(term));
-            } else {
-                // Simple search - check if any field contains the search term
-                matches = item.includes(searchTerm) || 
-                         category.includes(searchTerm) || 
-                         source.includes(searchTerm) || 
-                         buyer.includes(searchTerm) ||
-                         rank.includes(searchTerm);
-            }
-            
-            if (!matches) {
+            if (!evaluate(ast, allText)) {
                 shouldShow = false;
             }
         }
-        
+
         // Apply affordability filter
         if (shouldShow && showAffordableOnly) {
             const isUnaffordable = row.classList.contains('unaffordable-item');
@@ -1077,21 +1110,17 @@ function filterTable(searchTerm) {
                 shouldShow = false;
             }
         }
-        
-        if (shouldShow) {
-            row.style.display = '';
-            visibleCount++;
-        } else {
-            row.style.display = 'none';
-        }
+
+        row.style.display = shouldShow ? '' : 'none';
+        if (shouldShow) visibleCount++;
     });
-    
-    // Update active orders count with filtered results
+
     const activeOrdersCount = document.getElementById('activeOrdersCount');
     if (activeOrdersCount) {
         activeOrdersCount.textContent = visibleCount;
     }
 }
+
 
 function toggleAffordableFilter() {
     const searchInput = document.getElementById('searchInput');
