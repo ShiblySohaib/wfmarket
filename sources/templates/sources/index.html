@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+
+{% block title %}Sources{% endblock %}
+{% block page_title %}Sources{% endblock %}
+
+{% block content %}
+<div class="card-panel">
+    <form id="source-form" class="row g-3 mb-4">
+        <input type="hidden" id="source-id">
+        <div class="col-md-5">
+            <label class="form-label">Source Name</label>
+            <input class="form-control" id="source-name" required>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Balance</label>
+            <input class="form-control" id="source-balance" type="number" min="0" value="0">
+        </div>
+        <div class="col-md-4 d-flex align-items-end gap-2">
+            <button class="btn btn-primary" type="submit">Save Source</button>
+            <button class="btn btn-secondary" type="button" id="reset-source-form">Reset</button>
+        </div>
+    </form>
+</div>
+
+<div class="card-panel mt-20">
+    <div class="table-responsive">
+        <table class="table theme-table">
+            <thead>
+                <tr>
+                    <th>Source</th>
+                    <th>Balance</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for source in sources %}
+                <tr data-source-id="{{ source.id }}" data-source-name="{{ source.source_name }}" data-source-balance="{{ source.balance }}">
+                    <td>{{ source.source_name }}</td>
+                    <td>{{ source.balance }}</td>
+                    <td class="d-flex gap-2">
+                        <button class="btn btn-secondary btn-sm edit-source">Edit</button>
+                        <button class="btn btn-danger btn-sm delete-source">Delete</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="text-center text-muted">No sources available.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const sourceForm = document.getElementById('source-form');
+const sourceIdInput = document.getElementById('source-id');
+const sourceNameInput = document.getElementById('source-name');
+const sourceBalanceInput = document.getElementById('source-balance');
+
+function resetSourceForm() {
+    sourceForm.reset();
+    sourceIdInput.value = '';
+}
+
+sourceForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const sourceId = sourceIdInput.value;
+    const response = await fetch(sourceId ? `/sources/edit/${sourceId}/` : '/sources/add/', {
+        method: 'POST',
+        headers: window.jsonHeaders(),
+        body: JSON.stringify({
+            source_name: sourceNameInput.value,
+            balance: sourceBalanceInput.value,
+        }),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+        alert(data.error || 'Unable to save source.');
+        return;
+    }
+    window.location.reload();
+});
+
+document.getElementById('reset-source-form').addEventListener('click', resetSourceForm);
+
+document.querySelectorAll('.edit-source').forEach((button) => {
+    button.addEventListener('click', () => {
+        const row = button.closest('tr');
+        sourceIdInput.value = row.dataset.sourceId;
+        sourceNameInput.value = row.dataset.sourceName;
+        sourceBalanceInput.value = row.dataset.sourceBalance;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+});
+
+document.querySelectorAll('.delete-source').forEach((button) => {
+    button.addEventListener('click', async () => {
+        if (!confirm('Delete this source?')) {
+            return;
+        }
+        const sourceId = button.closest('tr').dataset.sourceId;
+        const response = await fetch(`/sources/delete/${sourceId}/`, {
+            method: 'DELETE',
+            headers: window.jsonHeaders(),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            alert(data.error || 'Unable to delete source.');
+            return;
+        }
+        window.location.reload();
+    });
+});
+</script>
+{% endblock %}

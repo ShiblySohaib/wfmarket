@@ -1,0 +1,546 @@
+{% extends "base.html" %}
+
+{% block title %}Market Dashboard{% endblock %}
+{% block page_title %}Market Dashboard{% endblock %}
+
+{% block content %}
+<div style="display:none">{% csrf_token %}</div>
+<div class="row g-4">
+    <!-- ── Search & Filters ── -->
+    <div class="col-12">
+        <div class="card-panel pb-3">
+            <div class="row g-3 align-items-center">
+                <div class="col-md-8">
+                    <div class="input-group">
+                        <span class="input-group-text bg-transparent border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="market-search" class="form-control border-start-0 ps-2" 
+                               placeholder="Search orders (e.g. prime +systems -harrow)...">
+                    </div>
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="form-check form-switch d-inline-block">
+                        <input class="form-check-input" type="checkbox" id="filter-affordable" checked>
+                        <label class="form-check-label text-secondary small" for="filter-affordable">Affordable Only</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Failed Items (hidden by default) ── -->
+    <div class="col-12" id="failed-section" style="display: none;">
+        <div class="card-panel border-danger-subtle">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="section-title text-danger mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Failed Items</h3>
+                <span id="failed-count-badge" class="badge bg-danger rounded-pill">0</span>
+            </div>
+            <div class="table-responsive" style="max-height: 250px;">
+                <table class="table theme-table table-sm">
+                    <thead>
+                        <tr>
+                            <th style="width: 25%;">Item</th>
+                            <th style="width: 15%;">Error</th>
+                            <th style="width: 60%;">URL</th>
+                        </tr>
+                    </thead>
+                    <tbody id="failed-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Market table card ──────────────────────────────────────────── -->
+    <div class="col-xl-12">
+        <div class="card-panel">
+
+            <!-- Header row: title left, controls right -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h3 class="section-title mb-0">Orders <span id="orders-count-label" class="text-secondary ms-2" style="font-size: 1rem;">0</span></h3>
+
+                <!-- Right-side control cluster -->
+                <div class="d-flex align-items-center gap-3" style="position: relative;">
+
+                    <!-- Progress bar -->
+                    <div class="progress-shell" style="width: 160px; height: 8px; margin: 0;
+                                background: var(--bg-tertiary, #3e4452); border-radius: 4px; overflow: hidden;">
+                        <div id="fetch-progress-bar"
+                             style="height: 100%; width: 0%; background: var(--accent-blue, #61afef);
+                                    transition: width 0.5s ease; border-radius: 4px;"></div>
+                    </div>
+                    <span id="fetch-progress-label"
+                          style="min-width: 80px; font-size: 0.82rem; color: var(--text-secondary, #888); white-space: nowrap;">0 % (0/0)</span>
+
+                    <!-- Refresh button -->
+                    <button id="refresh-btn" class="btn btn-primary btn-icon btn-refresh"
+                            title="Refresh market data (aborts current fetch and starts a new one)">
+                        <i id="refresh-icon" class="fas fa-sync-alt"></i>
+                    </button>
+
+                    <!-- Hover tooltip -->
+                    <div id="fetch-tooltip"
+                         style="display: none; position: absolute; top: calc(100% + 10px); right: 0;
+                                background: var(--bg-secondary); border: 1px solid var(--border-color);
+                                padding: 14px 16px; border-radius: 8px; z-index: 1050;
+                                box-shadow: 0 6px 24px rgba(0,0,0,0.55); width: 275px; font-size: 0.8rem;">
+                        <p style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 10px;">
+                            The server automatically refreshes market data in the background.
+                            Clicking Refresh starts a new fetch immediately.
+                        </p>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span style="color: var(--text-secondary);">Status</span>
+                            <span id="tt-badge" class="fetch-type-badge idle">Idle</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span style="color: var(--text-secondary);">Session</span>
+                            <code id="tt-session" style="font-size: 0.72rem;">—</code>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span style="color: var(--text-secondary);">Processed</span>
+                            <strong id="tt-counts">0 / 0</strong>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center mb-2 pt-1" style="border-top:1px solid var(--border-color); opacity:0.8;">
+                            <span style="color: var(--text-secondary);">Next Fetch</span>
+                            <span id="tt-countdown" style="font-family: monospace; font-weight: 600; color: var(--accent-blue);">00:00</span>
+                        </div>
+                    </div><!-- /tooltip -->
+
+                </div><!-- /controls -->
+            </div><!-- /header -->
+
+            <!-- Table -->
+            <div class="table-responsive">
+                <table class="table theme-table" id="market-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Item</th>
+                            <th style="width: 10%;">Category</th>
+                            <th style="width: 18%;">Source</th>
+                            <th style="width: 6%;">Qty</th>
+                            <th style="width: 12%;">Buyer</th>
+                            <th style="width: 10%;">Platinum</th>
+                            <th style="width: 8%;">Order Qty</th>
+                            <th style="width: 8%;">Rank</th>
+                            <th style="width: 13%;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="market-tbody">
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                Awaiting market data…
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+
+{% block extra_js %}
+<script>
+(function () {
+    'use strict';
+
+    /* ── DOM ──────────────────────────────────────────────────── */
+    const refreshBtn  = document.getElementById('refresh-btn');
+    const refreshIcon = document.getElementById('refresh-icon');
+    const progressBar = document.getElementById('fetch-progress-bar');
+    const progressLbl = document.getElementById('fetch-progress-label');
+    const tbody       = document.getElementById('market-tbody');
+    const tooltip     = document.getElementById('fetch-tooltip');
+    const ttBadge     = document.getElementById('tt-badge');
+    const ttSession   = document.getElementById('tt-session');
+    const ttCounts    = document.getElementById('tt-counts');
+    const ttCountdown = document.getElementById('tt-countdown');
+
+    const ordersCountLabel = document.getElementById('orders-count-label');
+    const failedSection    = document.getElementById('failed-section');
+    const failedTbody      = document.getElementById('failed-tbody');
+    const failedCountBadge = document.getElementById('failed-count-badge');
+    const searchInput      = document.getElementById('market-search');
+    const affordableCheck  = document.getElementById('filter-affordable');
+
+    /* ── Config ───────────────────────────────────────────────── */
+    const POLL_MS = 1500;
+
+    /* ── State ────────────────────────────────────────────────── */
+    let sessionId     = null;
+    let heartbeatTimer= null;
+    let nextFetchTs   = 0;
+    let serverTimeSkew = 0;
+    let fullMarketData = []; // Store raw data for filtering
+
+    /* ── Tooltip hover ────────────────────────────────────────── */
+    let ttTimer;
+    refreshBtn.addEventListener('mouseenter', () => {
+        clearTimeout(ttTimer);
+        tooltip.style.display = 'block';
+    });
+    refreshBtn.addEventListener('mouseleave', () => {
+        ttTimer = setTimeout(() => { tooltip.style.display = 'none'; }, 180);
+    });
+    tooltip.addEventListener('mouseenter', () => clearTimeout(ttTimer));
+    tooltip.addEventListener('mouseleave', () => { tooltip.style.display = 'none'; });
+
+    /* ── Badge ────────────────────────────────────────────────── */
+    function setBadge(status, type = 'foreground') {
+        const idle = !status || ['idle', 'complete', 'aborted'].includes(status);
+        ttBadge.textContent = status || 'Idle';
+        
+        if (idle) {
+            ttBadge.className = 'fetch-type-badge idle';
+        } else {
+            // type could be 'foreground' or 'background'
+            ttBadge.className = 'fetch-type-badge ' + type;
+            if (type === 'background') {
+                ttBadge.textContent += ' (Auto)';
+            }
+        }
+    }
+
+
+    function updateCountdown() {
+        if (!nextFetchTs) {
+            ttCountdown.textContent = '—';
+            return;
+        }
+        const now = Date.now() / 1000 + serverTimeSkew;
+        const diff = Math.max(0, nextFetchTs - now);
+        
+        const h = Math.floor(diff / 3600);
+        const m = Math.floor((diff % 3600) / 60);
+        const s = Math.floor(diff % 60);
+        
+        const hh = String(h).padStart(2, '0');
+        const mm = String(m).padStart(2, '0');
+        const ss = String(s).padStart(2, '0');
+        
+        ttCountdown.textContent = `${hh}:${mm}:${ss}`; // Showing seconds too for better feel, user said HH:MM
+        // if user strictly wants HH:MM:
+        // ttCountdown.textContent = `${hh}:${mm}`;
+    }
+    setInterval(updateCountdown, 1000);
+
+    function applyProgress(data) {
+        const status = data.status     || 'idle';
+        const type   = data.created_by || 'foreground';
+        const pct    = typeof data.progress !== 'undefined' ? data.progress : null;
+        const done   = typeof data.processed_items !== 'undefined' ? data.processed_items : null;
+        const total  = typeof data.total_items !== 'undefined' ? data.total_items : null;
+        const active = !['complete', 'aborted', 'idle'].includes(status);
+
+        // Only update progress bar and counts if the data is present
+        // (This prevents resetting to 0 when the server goes idle)
+        if (pct !== null) {
+            progressBar.style.width = pct + '%';
+            progressLbl.textContent = `${pct} % (${done}/${total})`;
+            ttCounts.textContent = done + ' / ' + total;
+        }
+
+        // Spinning icon only while active
+        refreshIcon.classList.toggle('spinning', active);
+
+        // Tooltip fields
+        setBadge(status, type);
+        if (done !== null && total !== null) ttCounts.textContent = done + ' / ' + total;
+
+        const failures = data.failed_items || [];
+        // Update failures display regardless of type (to alert user of issues)
+        if (failures.length) {
+            failedSection.style.display = 'block';
+            failedCountBadge.textContent = failures.length;
+            failedTbody.innerHTML = failures.map(f => `
+                <tr>
+                    <td class="text-danger fw-medium">${escHtml(f.item_name)}</td>
+                    <td class="text-secondary small font-monospace">${escHtml(f.error)}</td>
+                    <td class="text-muted small font-monospace text-truncate" style="max-width: 0;">${escHtml(f.url || '—')}</td>
+                </tr>
+            `).join('');
+        } else {
+            failedSection.style.display = 'none';
+        }
+
+        // ── Table Updates ──
+        const incomingMarketData = data.market_data || [];
+        
+        if (type === 'foreground' || type === 'manual') {
+            // Foreground: Live updates + Clear on aborted (handled in renderTable)
+            if (incomingMarketData.length > 0) {
+                fullMarketData = incomingMarketData;
+                applyFilters();
+            } else if (status === 'complete' || status === 'aborted') {
+                if (status === 'aborted') {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Fetch aborted.</td></tr>';
+                } else if (incomingMarketData.length === 0) {
+                    renderTable([]);
+                }
+            }
+        } else {
+            // Background: Silent update ONLY on completion if data changed
+            if (status === 'complete' && incomingMarketData.length > 0) {
+                if (isDataChanged(fullMarketData, incomingMarketData)) {
+                    fullMarketData = incomingMarketData;
+                    applyFilters();
+                }
+            } else if (status === 'idle' && incomingMarketData.length > 0 && fullMarketData.length === 0) {
+                // Restore on page refresh
+                fullMarketData = incomingMarketData;
+                applyFilters();
+            }
+        }
+
+        if (data.next_fetch_at) {
+            nextFetchTs = data.next_fetch_at;
+            if (data.current_time) serverTimeSkew = data.current_time - (Date.now() / 1000);
+            updateCountdown();
+        }
+    }
+
+    /* ── Table ────────────────────────────────────────────────── */
+    function renderTable(data) {
+        ordersCountLabel.textContent = data ? data.length : 0;
+        if (!data || !data.length) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">No market orders matched your filters.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = data.map(e => {
+            const rowCls    = e.is_affordable ? 'affordable-row' : '';
+            const plat      = e.platinum        || 0;
+            const platCls   = plat >= 100 ? 'plat-high' : plat >= 50 ? 'plat-mid' : 'plat-low';
+            const rep       = e.user_reputation || 0;
+            const repCls    = rep >= 100 ? 'rep-high' : rep >= 20 ? 'rep-mid' : '';
+            const orderQty  = e.order_quantity  || 1;
+            const invQty    = e.inventory_quantity || 0;
+            const rank      = e.rank != null ? e.rank : '—';
+            
+            // Source boxes logic from old template
+            const sourcesList = e.sources_list || [];
+            const balancesList = e.balances_list || [];
+            const itemPrice = e.item_price || 0;
+
+            let sourceHtml = '';
+            if (sourcesList.length) {
+                for (let i = 0; i < sourcesList.length; i++) {
+                    const s = sourcesList[i];
+                    const bal = balancesList[i] || 0;
+                    const aff = bal >= itemPrice;
+                    const cls = aff ? 'source-box-item affordable' : 'source-box-item unaffordable';
+                    sourceHtml += `<div class="${cls}"><span class="src-name">${escHtml(s)}</span><span class="src-meta">${itemPrice}/${bal}</span></div>`;
+                }
+            } else {
+                sourceHtml = '<span class="text-muted">—</span>';
+            }
+
+            // Escape for inline onclick
+            const buyerJs   = (e.buyer || 'Unknown').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            const itemJs    = (e.item  || '—'      ).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+
+            return `<tr class="${rowCls}">
+                <td><span class="item-name">${escHtml(e.item || '—')}</span></td>
+                <td><span class="item-cat">${escHtml(e.category ? e.category.charAt(0).toUpperCase() + e.category.slice(1) : '—')}</span></td>
+                <td><div class="source-stack">${sourceHtml}</div></td>
+                <td class="qty-cell">${invQty}</td>
+                <td><span class="buyer-name">${escHtml(e.buyer || 'Unknown')}</span></td>
+                <td>
+                    <span class="plat-value ${platCls}">
+                        <i class="fas fa-circle plat-icon"></i>${plat}
+                    </span>
+                </td>
+                <td class="qty-cell">${orderQty}</td>
+                <td><span class="rank-label ${rank === 0 ? 'unranked-text' : ''}">${rank === 0 ? 'Unranked' : rank}</span></td>
+                <td>
+                    <button class="btn btn-whisper btn-sm"
+                            onclick="doWhisper('${buyerJs}','${itemJs}',${plat},${orderQty},${rank})"
+                            title="Copy whisper message">
+                        <i class="fas fa-comment-dots"></i> Whisper
+                    </button>
+                </td>
+            </tr>`;
+        }).join('');
+    }
+
+    /* ── Filtering Logic ─────────────────────────────────────── */
+    function applyFilters() {
+        const query = searchInput.value.trim().toLowerCase();
+        const showAffordable = affordableCheck.checked;
+
+        let filtered = fullMarketData;
+
+        // 1. Affordable filter
+        if (showAffordable) {
+            filtered = filtered.filter(e => e.is_affordable);
+        }
+
+        // 2. Boolean Search logic
+        if (query) {
+            const tokens = query.split(/\s+/).filter(t => t.length > 0);
+            
+            const required = tokens.filter(t => !t.startsWith('-'));
+            const excluded = tokens.filter(t => t.startsWith('-')).map(t => t.slice(1));
+
+            filtered = filtered.filter(e => {
+                const sources = (e.sources_list || []).join(' ');
+                const rankVal = (e.rank === 0) ? 'unranked' : ((e.rank != null && e.rank !== '—') ? e.rank.toString() : '');
+                const searchStr = `${e.item} ${e.category} ${e.buyer} ${sources} ${rankVal}`.toLowerCase();
+                
+                // Must have ALL required tokens (AND logic)
+                for (let req of required) {
+                    // Check if req starts with '+', if so, strip it
+                    const term = req.startsWith('+') ? req.slice(1) : req;
+                    if (!searchStr.includes(term)) return false;
+                }
+
+                // Must have NONE of the excluded tokens
+                for (let ex of excluded) {
+                    if (searchStr.includes(ex)) return false;
+                }
+
+                return true;
+            });
+        }
+
+        renderTable(filtered);
+    }
+
+    searchInput.addEventListener('input', applyFilters);
+    affordableCheck.addEventListener('change', applyFilters);
+
+    /* ── Whisper ──────────────────────────────────────────────── */
+    window.doWhisper = function (buyer, item, platinum, quantity, rank) {
+        const rankText = (rank != null && rank !== '—') ? ` (rank ${rank})` : '';
+        const msg = `/w ${buyer} Hi! I want to sell: ${item}${rankText} for ${platinum} platinum. (warframe.market)`;
+        navigator.clipboard.writeText(msg)
+            .then(() => flash('Whisper copied!'))
+            .catch(() => prompt('Copy this whisper:', msg));
+    };
+
+    function flash(msg) {
+        const el = Object.assign(document.createElement('div'), { textContent: msg });
+        Object.assign(el.style, {
+            position: 'fixed', bottom: '22px', right: '22px',
+            background: 'var(--accent-blue, #61afef)', color: '#fff',
+            padding: '7px 15px', borderRadius: '6px', zIndex: '9999',
+            fontSize: '0.83rem', boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
+            transition: 'opacity 0.4s',
+        });
+        document.body.appendChild(el);
+        setTimeout(() => { el.style.opacity = '0'; }, 1800);
+        setTimeout(() => el.remove(), 2300);
+    }
+
+    /* ── Data comparison ─────────────────────────────────────── */
+    function isDataChanged(oldData, newData) {
+        if (!oldData || !newData) return true;
+        if (oldData.length !== newData.length) return true;
+        // Simple stringify comparison for deep equal of sorted objects
+        // (Costly for very large lists, but acceptable for typical 100-500 item dashboard)
+        return JSON.stringify(oldData) !== JSON.stringify(newData);
+    }
+
+    /* ── HTML escape helper ───────────────────────────────────── */
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    /* ── Polling (Heartbeat) ─────────────────────────────────── */
+    async function heartbeat() {
+        try {
+            const r = await fetch('/api/fetch/status');
+            if (!r.ok) throw new Error('status fail');
+            const data = await r.json();
+
+            // Update countdown timestamp (always present in top-level status)
+            if (data.next_fetch_at) {
+                nextFetchTs = data.next_fetch_at;
+                if (data.current_time) serverTimeSkew = data.current_time - (Date.now() / 1000);
+                updateCountdown();
+            }
+
+            // session_id is present if running or queued
+            if (data.session_id) {
+                sessionId = data.session_id;
+                ttSession.textContent = sessionId.slice(0, 8) + '…';
+                if (data.progress) {
+                    const snapshot = { ...data.progress, created_by: data.created_by };
+                    applyProgress(snapshot);
+                } else {
+                    // Just queued status (ensure it resets to 0 here)
+                    applyProgress({ status: data.status, created_by: data.created_by, progress: 0, processed_items: 0, total_items: 0 });
+                }
+                setHeartbeat(POLL_MS);
+            } else {
+                // Server is idle
+                sessionId = null;
+                setBadge(data.status, data.created_by);
+                
+                // If the server provides the last known progress, restore the UI state
+                if (data.progress) {
+                    applyProgress(data.progress);
+                }
+                
+                setHeartbeat(4500);
+            }
+        } catch (err) {
+            setHeartbeat(6000);
+        }
+    }
+
+    function setHeartbeat(ms) {
+        clearTimeout(heartbeatTimer);
+        heartbeatTimer = setTimeout(heartbeat, ms);
+    }
+
+    /* ── Start a fetch (manual refresh button only) ──────────── */
+    async function startFetch() {
+        try {
+            const resp = await fetch('/api/fetch', {
+                method: 'POST',
+                headers: _jsonHeaders(),
+                body: JSON.stringify({ created_by: 'dashboard' }),
+            });
+            const data = await resp.json();
+            if (!resp.ok) { console.error('Fetch start error:', data.error); return; }
+
+            sessionId = data.session_id;
+            ttSession.textContent = sessionId.slice(0, 8) + '…';
+            setBadge('queued', 'foreground');
+            refreshIcon.classList.add('spinning');
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted py-4">Fetching…</td></tr>';
+            heartbeat(); // immediate update
+        } catch (err) {
+            console.error('startFetch:', err);
+        }
+    }
+
+    function _getCsrf() {
+        // Try meta tag first, then cookie
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        if (meta) return meta.getAttribute('content');
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : '';
+    }
+
+    function _jsonHeaders() {
+        const base = window.jsonHeaders ? window.jsonHeaders() : { 'Content-Type': 'application/json' };
+        // Ensure CSRF token is always present
+        base['X-CSRFToken'] = _getCsrf();
+        return base;
+    }
+
+    /* ── Refresh button click ─────────────────────────────────── */
+    refreshBtn.addEventListener('click', startFetch);
+
+    /* ── Boot ────────────────────────────────────────────────── */
+    heartbeat();
+
+})();
+</script>
+
+{% endblock %}

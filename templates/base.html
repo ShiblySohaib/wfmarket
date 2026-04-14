@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Warframe Market Manager{% endblock %}</title>
+    {% load static %}
+    <script>
+        window.applyStoredTheme = function () {
+            const theme = JSON.parse(localStorage.getItem('wfmarket-theme') || '{}');
+            const root = document.documentElement;
+            const defaults = {
+                '--bg-primary': '#0a0e13',
+                '--bg-secondary': '#12171e',
+                '--accent-blue': '#0d839b',
+                '--accent-gold': '#ffd700',
+                '--text-primary': '#e8eaed',
+                '--text-secondary': '#9aa5b4',
+                '--error': '#f87171',
+                '--success': '#34d399'
+            };
+            Object.entries(defaults).forEach(([key, value]) => {
+                root.style.setProperty(key, theme[key] || value);
+            });
+        };
+        window.applyStoredTheme();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>WF Market</h2>
+            </div>
+            <ul class="sidebar-nav">
+                <li class="nav-item">
+                    <a href="{% url 'inventory:index' %}" class="nav-link {% if request.resolver_match.app_name == 'inventory' %}active{% endif %}">
+                        <i class="fas fa-box nav-icon"></i>
+                        <span class="nav-text">Inventory</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'market:index' %}" class="nav-link {% if request.resolver_match.app_name == 'market' and request.resolver_match.url_name != 'settings_page' %}active{% endif %}">
+                        <i class="fas fa-chart-line nav-icon"></i>
+                        <span class="nav-text">Market</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'sources:index' %}" class="nav-link {% if request.resolver_match.app_name == 'sources' %}active{% endif %}">
+                        <i class="fas fa-coins nav-icon"></i>
+                        <span class="nav-text">Sources</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{% url 'market:settings_page' %}" class="nav-link {% if request.resolver_match.app_name == 'market' and request.resolver_match.url_name == 'settings_page' %}active{% endif %}">
+                        <i class="fas fa-cog nav-icon"></i>
+                        <span class="nav-text">Settings</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="content-header">
+                <h1>{% block page_title %}Warframe Market Manager{% endblock %}</h1>
+            </div>
+
+            <!-- Messages -->
+            {% if messages %}
+                <div class="messages" style="padding: 0 28px;">
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <!-- Page Content -->
+            <div class="content-body">
+                {% block content %}
+                <div class="welcome-message">
+                    <h2>Welcome to your Warframe Market Manager</h2>
+                    <p>Use the sidebar to navigate through your inventory and market data.</p>
+                </div>
+                {% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI" crossorigin="anonymous"></script>
+    <script>
+        window.getCsrfToken = function () {
+            const match = document.cookie.match(/csrftoken=([^;]+)/);
+            return match ? decodeURIComponent(match[1]) : '';
+        };
+        window.jsonHeaders = function () {
+            return {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': window.getCsrfToken()
+            };
+        };
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

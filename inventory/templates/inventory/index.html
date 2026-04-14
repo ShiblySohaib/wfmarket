@@ -1,0 +1,327 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory{% endblock %}
+{% block page_title %}Inventory{% endblock %}
+
+{% block content %}
+<div class="card-panel">
+    <form id="item-form" class="row g-3 mb-4">
+        <input type="hidden" id="item-id">
+        <div class="col-md-3">
+            <label class="form-label">Name</label>
+            <input class="form-control" id="item-name" required>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Category</label>
+            <select class="form-control form-select" id="item-category" required>
+                <option value="mod">Mod</option>
+                <option value="arcane">Arcane</option>
+                <option value="part">Part</option>
+                <option value="misc">Misc</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Quantity</label>
+            <input class="form-control" id="item-quantity" type="number" min="1" value="1">
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Price</label>
+            <input class="form-control" id="item-price" type="number" min="0">
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Sources</label>
+            <select class="form-select" id="item-sources" multiple>
+                {% for source in sources %}
+                <option value="{{ source.id }}">{{ source.source_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-12 d-flex justify-content-between">
+            <div class="d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Save Item</button>
+                <button class="btn btn-secondary" type="button" id="reset-item-form">Reset</button>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span id="sync-status" class="text-secondary small"></span>
+                <button class="btn btn-secondary btn-sm" id="btn-sync-labels">
+                    <i class="fas fa-sync-alt me-1"></i> Update Labels
+                </button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ── Search & Filters ── -->
+<div class="card-panel mt-20 pb-3">
+    <div class="row g-3 align-items-center">
+        <div class="col-12">
+            <div class="input-group">
+                <span class="input-group-text bg-transparent border-end-0"><i class="fas fa-search text-muted"></i></span>
+                <input type="text" id="inventory-search" class="form-control border-start-0 ps-2" 
+                       placeholder="Search inventory (e.g. prime +systems -harrow)...">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card-panel mt-20">
+    <div class="table-responsive">
+        <table class="table theme-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Quantity</th>
+                    <th>Price</th>
+                    <th>Sources</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in items %}
+                <tr
+                    data-item-id="{{ item.id }}"
+                    data-item-name="{{ item.name }}"
+                    data-item-category="{{ item.category }}"
+                    data-item-quantity="{{ item.quantity }}"
+                    data-item-price="{{ item.price|default_if_none:'' }}"
+                    data-item-sources="{% for source in item.sources.all %}{{ source.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                >
+                    <td>{{ item.name }}</td>
+                    <td>{{ item.category }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.price|default:"-" }}</td>
+                    <td>
+                        {% for source in item.sources.all %}
+                        <span class="badge text-bg-secondary">{{ source.source_name }}</span>
+                        {% empty %}
+                        <span class="text-muted">None</span>
+                        {% endfor %}
+                    </td>
+                    <td class="d-flex gap-2">
+                        <button class="btn btn-secondary btn-sm edit-item">Edit</button>
+                        <button class="btn btn-danger btn-sm delete-item">Delete</button>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="text-center text-muted">No inventory items yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const itemForm = document.getElementById('item-form');
+const itemIdInput = document.getElementById('item-id');
+const itemNameInput = document.getElementById('item-name');
+const itemCategoryInput = document.getElementById('item-category');
+const itemQuantityInput = document.getElementById('item-quantity');
+const itemPriceInput = document.getElementById('item-price');
+const itemSourcesInput = document.getElementById('item-sources');
+
+function selectedSources() {
+    return Array.from(itemSourcesInput.selectedOptions).map(option => option.value);
+}
+
+function resetItemForm() {
+    itemForm.reset();
+    itemIdInput.value = '';
+}
+
+itemForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const payload = {
+        name: itemNameInput.value,
+        category: itemCategoryInput.value,
+        quantity: itemQuantityInput.value,
+        price: itemPriceInput.value,
+        source_ids: selectedSources(),
+    };
+    const itemId = itemIdInput.value;
+    const url = itemId ? `/edit/${itemId}/` : '/add/';
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: window.jsonHeaders(),
+        body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+        alert(data.error || 'Unable to save item.');
+        return;
+    }
+    window.location.reload();
+});
+
+document.getElementById('reset-item-form').addEventListener('click', resetItemForm);
+
+document.querySelectorAll('.edit-item').forEach((button) => {
+    button.addEventListener('click', () => {
+        const row = button.closest('tr');
+        itemIdInput.value = row.dataset.itemId;
+        itemNameInput.value = row.dataset.itemName;
+        itemCategoryInput.value = row.dataset.itemCategory;
+        itemQuantityInput.value = row.dataset.itemQuantity;
+        itemPriceInput.value = row.dataset.itemPrice;
+        const selected = row.dataset.itemSources ? row.dataset.itemSources.split(',') : [];
+        Array.from(itemSourcesInput.options).forEach((option) => {
+            option.selected = selected.includes(option.value);
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+});
+
+document.querySelectorAll('.delete-item').forEach((button) => {
+    button.addEventListener('click', async () => {
+        if (!confirm('Delete this item?')) {
+            return;
+        }
+        const itemId = button.closest('tr').dataset.itemId;
+        const response = await fetch(`/delete/${itemId}/`, {
+            method: 'POST',
+            headers: window.jsonHeaders(),
+            body: JSON.stringify({}),
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            alert(data.error || 'Unable to delete item.');
+            return;
+        }
+        window.location.reload();
+    });
+});
+
+/* ── Boolean Search Implementation ────────────────────────── */
+const inventorySearch = document.getElementById('inventory-search');
+const inventoryBody   = document.querySelector('.theme-table tbody');
+const inventoryRows   = Array.from(inventoryBody.querySelectorAll('tr[data-item-id]'));
+
+function applyInventoryFilters() {
+    const query = inventorySearch.value.trim().toLowerCase();
+    
+    if (!query) {
+        inventoryRows.forEach(row => row.style.display = '');
+        return;
+    }
+
+    const tokens = query.split(/\s+/).filter(t => t.length > 0);
+    const required = tokens.filter(t => !t.startsWith('-'));
+    const excluded = tokens.filter(t => t.startsWith('-')).map(t => t.slice(1));
+
+    inventoryRows.forEach(row => {
+        // Build search string from row data
+        const name     = row.dataset.itemName.toLowerCase();
+        const category = row.dataset.itemCategory.toLowerCase();
+        
+        // Extract source names from the badges in the 5th column
+        const sources = Array.from(row.querySelectorAll('td:nth-child(5) .badge'))
+                            .map(b => b.textContent.toLowerCase())
+                            .join(' ');
+        
+        const searchStr = `${name} ${category} ${sources}`;
+        let match = true;
+
+        // Must have ALL required tokens (AND logic)
+        for (let req of required) {
+            const term = req.startsWith('+') ? req.slice(1) : req;
+            if (!searchStr.includes(term)) {
+                match = false;
+                break;
+            }
+        }
+
+        // Must have NONE of the excluded tokens
+        if (match) {
+            for (let ex of excluded) {
+                if (searchStr.includes(ex)) {
+                    match = false;
+                    break;
+                }
+            }
+        }
+
+        row.style.display = match ? '' : 'none';
+    });
+}
+
+inventorySearch.addEventListener('input', applyInventoryFilters);
+
+/* ── Bulk Sync Labels ────────────────────────────────────── */
+const btnSyncLabels = document.getElementById('btn-sync-labels');
+const syncStatus    = document.getElementById('sync-status');
+
+btnSyncLabels.addEventListener('click', async () => {
+    if (!confirm('This will update the internal names for all inventory items using data from Warframe Market. Continue?')) return;
+    
+    btnSyncLabels.disabled = true;
+
+    // 1. Pause background fetches
+    try {
+        await fetch('/api/market/toggle-pause/', {
+            method: 'POST',
+            headers: window.jsonHeaders(),
+            body: JSON.stringify({ pause: true })
+        });
+    } catch (e) { console.error("Failed to pause market:", e); }
+
+    const itemsToSync = Array.from(document.querySelectorAll('tr[data-item-id]'));
+    let updatedCount = 0;
+    
+    // Rate limiting: use a concurrent worker pool of size 'rateLimit'
+    const rateLimit = parseInt("{{ rate_limit }}") || 1;
+    const items     = [...itemsToSync];
+    const total     = itemsToSync.length;
+
+    async function processQueue() {
+        while (items.length > 0) {
+            const row = items.shift();
+            if (!row) break;
+
+            const itemId = row.dataset.itemId;
+            const itemName = row.dataset.itemName;
+            const currentIndex = total - items.length;
+            
+            syncStatus.innerHTML = `<i class="fas fa-spinner fa-spin me-1"></i> Syncing labels... (${currentIndex}/${total})`;
+            
+            try {
+                const resp = await fetch(`/sync-label/${itemId}/`, {
+                    method: 'POST',
+                    headers: window.jsonHeaders()
+                });
+                const data = await resp.json();
+                if (data.success && data.updated) {
+                    updatedCount++;
+                }
+            } catch (err) {
+                console.error(`Failed to sync ${itemName}:`, err);
+            }
+
+            // Each worker waits 1 second between its assigned tasks.
+            // With 'rateLimit' workers, this averages exactly 'rateLimit' requests per second.
+            await new Promise(res => setTimeout(res, 1000));
+        }
+    }
+
+    // Launch concurrent workers
+    const workers = [];
+    for (let i = 0; i < rateLimit; i++) {
+        workers.push(processQueue());
+    }
+    await Promise.all(workers);
+    
+    // 2. Resume background fetches
+    try {
+        await fetch('/api/market/toggle-pause/', {
+            method: 'POST',
+            headers: window.jsonHeaders(),
+            body: JSON.stringify({ pause: false })
+        });
+    } catch (e) { console.error("Failed to resume market:", e); }
+
+    syncStatus.textContent = `Completed! ${updatedCount} items updated. Refreshing...`;
+    setTimeout(() => window.location.reload(), 1500);
+});
+</script>
+{% endblock %}

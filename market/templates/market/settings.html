@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Market Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <h3 class="section-title">Fetch Settings</h3>
+            <form id="settings-form" class="row g-3 mt-2">
+                {% csrf_token %}
+                <div class="col-md-6">
+                    <label class="form-label">Auto Refresh Interval</label>
+                    <input class="form-control" name="auto_refresh_interval" type="number" min="1" value="{{ settings.auto_refresh_interval }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Rate Limit</label>
+                    <input class="form-control" name="rate_limit" type="number" min="1" value="{{ settings.rate_limit }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">High Alert Threshold</label>
+                    <input class="form-control" name="high_alert_threshold" type="number" min="0" value="{{ settings.high_alert_threshold }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Alert Threshold</label>
+                    <input class="form-control" name="alert_threshold" type="number" min="0" value="{{ settings.alert_threshold }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Max Orders</label>
+                    <input class="form-control" name="max_orders" type="number" min="1" value="{{ settings.max_orders }}">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="submit">Save Settings</button>
+                    <span class="text-secondary align-self-center" id="settings-status"></span>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card-panel">
+            <h3 class="section-title">Theme Colors</h3>
+            <p class="text-secondary">These overrides stay in the browser and apply across the whole project until reset.</p>
+            <form id="theme-form" class="row g-3 mt-2">
+                <div class="col-md-6">
+                    <label class="form-label">Background Primary</label>
+                    <input class="form-control form-control-color" data-theme-var="--bg-primary" type="color" value="#0a0e13">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Background Secondary</label>
+                    <input class="form-control form-control-color" data-theme-var="--bg-secondary" type="color" value="#1a1f26">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Accent Blue</label>
+                    <input class="form-control form-control-color" data-theme-var="--accent-blue" type="color" value="#0d839b">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Accent Gold</label>
+                    <input class="form-control form-control-color" data-theme-var="--accent-gold" type="color" value="#ffd700">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Text Primary</label>
+                    <input class="form-control form-control-color" data-theme-var="--text-primary" type="color" value="#ffffff">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Text Secondary</label>
+                    <input class="form-control form-control-color" data-theme-var="--text-secondary" type="color" value="#b0bec5">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Success</label>
+                    <input class="form-control form-control-color" data-theme-var="--success" type="color" value="#4caf50">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Error</label>
+                    <input class="form-control form-control-color" data-theme-var="--error" type="color" value="#f44336">
+                </div>
+                <div class="col-12 d-flex gap-2">
+                    <button class="btn btn-primary" type="button" id="save-theme">Apply Colors</button>
+                    <button class="btn btn-secondary" type="button" id="reset-theme">Reset</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const settingsForm = document.getElementById('settings-form');
+const settingsStatus = document.getElementById('settings-status');
+const themeInputs = Array.from(document.querySelectorAll('[data-theme-var]'));
+
+function loadThemeInputs() {
+    const savedTheme = JSON.parse(localStorage.getItem('wfmarket-theme') || '{}');
+    themeInputs.forEach((input) => {
+        const value = savedTheme[input.dataset.themeVar] || input.defaultValue;
+        input.value = value;
+    });
+}
+
+settingsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const formData = Object.fromEntries(new FormData(settingsForm).entries());
+    const response = await fetch('/market/settings/update/', {
+        method: 'POST',
+        headers: window.jsonHeaders(),
+        body: JSON.stringify(formData),
+    });
+    const data = await response.json();
+    if (!response.ok || data.error) {
+        settingsStatus.textContent = data.error || 'Unable to save settings.';
+        return;
+    }
+    settingsStatus.textContent = 'Settings saved.';
+});
+
+document.getElementById('save-theme').addEventListener('click', () => {
+    const savedTheme = {};
+    themeInputs.forEach((input) => {
+        savedTheme[input.dataset.themeVar] = input.value;
+    });
+    localStorage.setItem('wfmarket-theme', JSON.stringify(savedTheme));
+    window.applyStoredTheme();
+});
+
+document.getElementById('reset-theme').addEventListener('click', () => {
+    localStorage.removeItem('wfmarket-theme');
+    window.applyStoredTheme();
+    loadThemeInputs();
+});
+
+loadThemeInputs();
+</script>
+{% endblock %}
