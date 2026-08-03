@@ -1,5 +1,5 @@
 # WFmarket
-- uses warframe api v2
+- uses warframe market api v2
 - lets user entry own inventory items
 - searches and shows top posted offers from the buyers for those items in the market
 - boolean search is implemented for all pages for advanced lookup
